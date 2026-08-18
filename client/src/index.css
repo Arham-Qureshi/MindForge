@@ -1,3 +1,13 @@
+/*
+ * MindForge design tokens (Tailwind v4 @theme).
+ *
+ * - Spacing tokens are intentionally named --space-* rather than --spacing-*:
+ *   Tailwind v4 reserves the --spacing-* namespace, and defining it in
+ *   @theme would shadow the framework and silently re-scale every
+ *   p-4 / gap-4 / px-4 utility. Do not rename them back.
+ * - The --font-* families use design.md substitutes (Haas Grot -> Inter,
+ *   Martian Mono -> Space Mono), loaded via @fontsource in main.tsx.
+ */
 @import "tailwindcss";
 
 @theme {
@@ -16,9 +26,9 @@
     --color-sunbeam: #ffe54d;
 
     /* Typography */
-    --font-haas-grot-disp: 'Haas Grot Disp', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-haas-grot-text: 'Haas Grot Text', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-martian-mono: 'Martian Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-haas-grot-disp: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-haas-grot-text: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-martian-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
     /* Typography — Scale */
     --text-caption-mono: 12px;
