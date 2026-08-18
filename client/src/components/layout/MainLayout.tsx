@@ -1,7 +1,12 @@
+import Header from "./Header";
+import Footer from "./Footer";
+
 export default function MainLayout() {
   return (
-    <main className="mx-auto w-full max-w-[1200px] px-4 py-8">
-      <p>MindForge</p>
-    </main>
+    <div className="min-h-screen bg-chalk-blue">
+      <Header />
+      <main className="mx-auto w-full max-w-[1200px] px-4">{/* content renders here */}</main>
+      <Footer />
+    </div>
   );
 }
