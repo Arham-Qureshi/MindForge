@@ -1,0 +1,40 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import request from "supertest";
+import express from "express";
+import { uploadMiddleware, validatePDFHeader } from "../src/middleware/upload.middleware.js";
+import { errorMiddleware } from "../src/middleware/error.middleware.js";
+import { processDocument } from "../src/controllers/document.controller.js";
+import * as proxyService from "../src/services/pythonProxy.service.js";
+
+function makeApp() {
+  const app = express();
+  app.post("/process", uploadMiddleware, validatePDFHeader, processDocument);
+  app.use(errorMiddleware);
+  return app;
+}
+
+describe("POST /process", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("forwards buffer and returns engine JSON, clearing req.file", async () => {
+    vi.spyOn(proxyService, "forwardToPythonEngine").mockResolvedValue({ docType: "NOTES" });
+    const app = makeApp();
+    const res = await request(app)
+      .post("/process")
+      .attach("file", Buffer.from("%PDF-1.7\ncontent"), "doc.pdf");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ docType: "NOTES" });
+    expect(proxyService.forwardToPythonEngine).toHaveBeenCalledOnce();
+  });
+
+  it("returns 503 ERR_503 when the python engine is down", async () => {
+    const err = new proxyService.PythonEngineDownError("ECONNREFUSED");
+    vi.spyOn(proxyService, "forwardToPythonEngine").mockRejectedValue(err);
+    const app = makeApp();
+    const res = await request(app)
+      .post("/process")
+      .attach("file", Buffer.from("%PDF-1.7\ncontent"), "doc.pdf");
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe("ERR_503");
+  });
+});

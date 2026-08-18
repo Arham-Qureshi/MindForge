@@ -1,6 +1,8 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX, ERR } from "../config/constants.js";
+import { uploadMiddleware, validatePDFHeader } from "../middleware/upload.middleware.js";
+import { processDocument } from "../controllers/document.controller.js";
 
 export const documentRouter = Router();
 
@@ -17,3 +19,5 @@ const uploadRateLimiter = rateLimit({
 });
 
 documentRouter.use(uploadRateLimiter);
+
+documentRouter.post("/process", uploadMiddleware, validatePDFHeader, processDocument);
