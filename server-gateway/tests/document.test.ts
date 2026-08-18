@@ -1,20 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import express from "express";
+import type { Request } from "express";
 import { uploadMiddleware, validatePDFHeader } from "../src/middleware/upload.middleware.js";
 import { errorMiddleware } from "../src/middleware/error.middleware.js";
 import { processDocument } from "../src/controllers/document.controller.js";
 import * as proxyService from "../src/services/pythonProxy.service.js";
 
+let serverReq: Request | undefined;
+
 function makeApp() {
   const app = express();
+  app.use((req, _res, next) => {
+    serverReq = req;
+    next();
+  });
   app.post("/process", uploadMiddleware, validatePDFHeader, processDocument);
   app.use(errorMiddleware);
   return app;
 }
 
 describe("POST /process", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    serverReq = undefined;
+  });
 
   it("forwards buffer and returns engine JSON, clearing req.file", async () => {
     vi.spyOn(proxyService, "forwardToPythonEngine").mockResolvedValue({ docType: "NOTES" });
@@ -25,7 +35,7 @@ describe("POST /process", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ docType: "NOTES" });
     expect(proxyService.forwardToPythonEngine).toHaveBeenCalledOnce();
-    expect((res.req as any).file).toBeUndefined();
+    expect(serverReq?.file).toBeUndefined();
   });
 
   it("returns 503 ERR_503 when the python engine is down", async () => {
