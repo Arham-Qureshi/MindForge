@@ -25,6 +25,7 @@ describe("POST /process", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ docType: "NOTES" });
     expect(proxyService.forwardToPythonEngine).toHaveBeenCalledOnce();
+    expect((res.req as any).file).toBeUndefined();
   });
 
   it("returns 503 ERR_503 when the python engine is down", async () => {
