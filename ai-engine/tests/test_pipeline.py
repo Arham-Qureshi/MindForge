@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from app.pipelines.llm_client import LLMClient
 from app.pipelines.base_pipeline import execute_chunks, _deduplicate
+from app.prompts import INJECTION_GUARD
 
 
 def test_deduplicate_removes_duplicates():
@@ -21,7 +22,7 @@ def test_execute_chunks_calls_llm():
     mock_chunks = ["chunk1", "chunk2"]
     with patch("app.pipelines.base_pipeline.llm_client") as mock_client:
         mock_client.complete.return_value = json.dumps({"result": "ok"})
-        results = execute_chunks(mock_chunks, system_prompt="test")
+        results = execute_chunks(mock_chunks, task="chunker")
         assert len(results) == 2
         assert mock_client.complete.call_count == 2
 
@@ -33,19 +34,24 @@ def test_llm_client_complete():
     with patch("app.pipelines.llm_client.Groq") as MockGroq:
         MockGroq.return_value.chat.completions.create.return_value = mock_response
         client = LLMClient()
-        result = client.complete(system="test", user="hello")
+        result = client.complete(task="chunker", user="hello")
         assert result == '{"result": "ok"}'
 
 
-def test_llm_client_wraps_prompt():
+def test_llm_client_guard_in_system_message():
     mock_response = MagicMock()
     mock_response.choices = [MagicMock(message=MagicMock(content='{"ok": true}'))]
 
     with patch("app.pipelines.llm_client.Groq") as MockGroq:
         client = LLMClient()
-        client.complete(system="test", user="sensitive text")
+        client.complete(task="chunker", user="sensitive text")
         call_args = MockGroq.return_value.chat.completions.create.call_args
+
+        system_msg = call_args[1]["messages"][0]["content"]
         user_msg = call_args[1]["messages"][1]["content"]
+
+        assert "security_policy" in system_msg
+        assert "UNTRUSTED INPUT" in system_msg
         assert "<user_document_content>" in user_msg
-        assert "CRITICAL" in user_msg
         assert "sensitive text" in user_msg
+        assert "CRITICAL" not in user_msg
