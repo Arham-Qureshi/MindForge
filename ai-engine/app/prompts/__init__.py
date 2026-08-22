@@ -39,8 +39,23 @@ OUTPUT RULES:
 - Respond ONLY with valid JSON
 - Do not include markdown formatting
 - Do not include explanatory text outside the JSON""",
+
+    "syllabus": """You are a syllabus analysis engine for MindForge AI.
+
+{task_description}
+
+{injection_guard}
+
+OUTPUT RULES:
+- Respond ONLY with valid JSON matching the SyllabusPayload schema
+- Use Bloom's Taxonomy levels: Remember, Understand, Apply, Analyze, Evaluate, Create
+- Priority topic weightages must sum to 1.0
+- Do not include markdown or explanatory text outside the JSON""",
 }
 
 TASK_DESCRIPTIONS = {
     "chunker": "Extract structured data from the provided document chunk.",
+    "syllabus": """Extract structured syllabus data from the provided text chunk.
+Return course_title, total_units, learning_path (units with topics and cognitive levels),
+and priority_topics with percentage weightages.""",
 }
