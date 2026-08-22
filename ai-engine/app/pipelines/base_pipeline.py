@@ -14,11 +14,11 @@ def _deduplicate(items: list[dict], key: str = "question") -> list[dict]:
 
 def execute_chunks(
     chunks: list[str],
-    system_prompt: str,
+    task: str,
     max_workers: int = 5,
 ) -> list[dict]:
     def process_one(chunk_text: str) -> dict:
-        raw = llm_client.complete(system=system_prompt, user=chunk_text)
+        raw = llm_client.complete(task=task, user=chunk_text)
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
