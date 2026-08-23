@@ -64,6 +64,18 @@ OUTPUT RULES:
 - Percentage values must be between 0.0 and 1.0
 - Probability scores must be between 0.0 and 1.0
 - Do not include markdown or explanatory text outside the JSON""",
+
+    "notes": """You are a lecture notes analysis engine for MindForge AI.
+
+{task_description}
+
+{injection_guard}
+
+OUTPUT RULES:
+- Respond ONLY with valid JSON matching the NotesPayload schema
+- Flashcards must have front, back, bloom_category (all 6 Bloom's levels), and difficulty (Easy/Medium/Hard)
+- Quiz questions must have exactly 4 options, correct_answer_index (0-3), and a detailed solution
+- Do not include markdown or explanatory text outside the JSON""",
 }
 
 TASK_DESCRIPTIONS = {
@@ -74,4 +86,8 @@ and priority_topics with percentage weightages.""",
     "pyq": """Analyze this Previous Year Question (PYQ) text chunk.
 Group questions by topic, calculate how often each topic appears (percentage of total questions),
 and generate predicted HOT exam questions for Apply, Analyze, and Evaluate levels.""",
+    "notes": """Analyze this lecture notes chunk.
+Generate flashcard term/definition pairs across Bloom's taxonomy levels with difficulty assessments.
+Create multiple-choice practice exam questions with 4 options and detailed solution explanations.
+Produce a concise summary of the document content.""",
 }
