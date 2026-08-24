@@ -1,13 +1,3 @@
-/*
- * MindForge design tokens (Tailwind v4 @theme).
- *
- * - Spacing tokens are intentionally named --space-* rather than --spacing-*:
- *   Tailwind v4 reserves the --spacing-* namespace, and defining it in
- *   @theme would shadow the framework and silently re-scale every
- *   p-4 / gap-4 / px-4 utility. Do not rename them back.
- * - The --font-* families use design.md substitutes (Haas Grot -> Inter,
- *   Martian Mono -> Space Mono), loaded via @fontsource in main.tsx.
- */
 @import "tailwindcss";
 
 @theme {
@@ -26,9 +16,9 @@
     --color-sunbeam: #ffe54d;
 
     /* Typography */
-    --font-haas-grot-disp: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-haas-grot-text: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-martian-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-haas-grot-disp: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-haas-grot-text: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-martian-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
     /* Typography — Scale */
     --text-caption-mono: 12px;
@@ -104,10 +94,64 @@
     --radius-shapes: 0px;
     --radius-buttons: 48px;
 
-    /* Surfaces (from cssVariable.css) */
+    /* Surfaces (from cssVariable.css) 
     --surface-chalk-blue-canvas: #f0f6ff;
     --surface-paper-white-card: #ffffff;
     --surface-frost-blue-wash: #e1edff;
     --surface-bubblegum-section: #ffbac4;
     --surface-hi-yellow-section: #ffda00;
+}
+
+@layer utilities {
+    .shadow-hard-sm {
+        box-shadow: 4px 4px 0px 0px var(--color-ink-black);
+    }
+    
+    .shadow-hard-md {
+        box-shadow: 8px 8px 0px 0px var(--color-ink-black);
+    }
+    
+    .shadow-hard-lg {
+        box-shadow: 12px 12px 0px 0px var(--color-ink-black);
+    }
+
+    .hover-press {
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    
+    .hover-press:hover {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0px 0px var(--color-ink-black) !important;
+    }
+    
+    .hover-press:active {
+        transform: translate(4px, 4px);
+        box-shadow: 0px 0px 0px 0px var(--color-ink-black) !important;
+    }
+
+    .hover-press-md {
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    
+    .hover-press-md:hover {
+        transform: translate(4px, 4px);
+        box-shadow: 4px 4px 0px 0px var(--color-ink-black) !important;
+    }
+    
+    .hover-press-md:active {
+        transform: translate(8px, 8px);
+        box-shadow: 0px 0px 0px 0px var(--color-ink-black) !important;
+    }
+
+    .clip-pentagon {
+        clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+    }
+    
+    .clip-triangle {
+        clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    }
+    
+    .clip-star {
+        clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    }
 }
