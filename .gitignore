@@ -5,3 +5,5 @@ skills-lock.json
 .opencode/
 AGENTS.md
 design/
+codebase-out/
+.agentignore
