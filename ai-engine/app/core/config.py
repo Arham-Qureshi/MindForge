@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
-    DEFAULT_LLM_MODEL: str = "llama-3.1-70b-versatile"
+    DEFAULT_LLM_MODEL: str = "openai/gpt-oss-120b"
     PYTHON_ENGINE_PORT: int = 8000
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 
