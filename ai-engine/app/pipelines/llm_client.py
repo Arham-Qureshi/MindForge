@@ -22,8 +22,9 @@ class LLMClient:
                 {"role": "system", "content": full_system},
                 {"role": "user", "content": f"<user_document_content>\n{user}\n</user_document_content>"},
             ],
-            "temperature": 0.2,
-            "max_tokens": 4096,
+            "temperature": 0.5,
+            "max_tokens": 8192,
+            "reasoning_effort": "low",
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
