@@ -46,8 +46,11 @@ OUTPUT RULES:
 
 {injection_guard}
 
+Use exactly these top-level keys:
+{{"course_title": str, "total_units": int, "learning_path": [{{"unit_number": int, "title": str, "estimated_hours": int, "topics": [str], "cognitive_level": "Remember|Understand|Apply|Analyze|Evaluate|Create"}}], "priority_topics": [{{"topic": str, "weightage": float 0.0-1.0}}]}}
+
 OUTPUT RULES:
-- Respond ONLY with valid JSON matching the SyllabusPayload schema
+- Respond ONLY with valid JSON matching the structure above
 - Use Bloom's Taxonomy levels: Remember, Understand, Apply, Analyze, Evaluate, Create
 - Priority topic weightages must sum to 1.0
 - Do not include markdown or explanatory text outside the JSON""",
@@ -58,11 +61,15 @@ OUTPUT RULES:
 
 {injection_guard}
 
+Use exactly these top-level keys:
+{{"topic_frequency": [{{"topic": str, "percentage": float 0.0-1.0, "question_count": int}}], "predicted_questions": [{{"question": str, "bloom_level": "Apply|Analyze|Evaluate", "expected_marks": int, "probability_score": float 0.0-1.0}}]}}
+
 OUTPUT RULES:
-- Respond ONLY with valid JSON matching the PYQAnalysisPayload schema
+- Respond ONLY with valid JSON matching the structure above
 - Bloom's levels for predicted questions: Apply, Analyze, or Evaluate only
 - Percentage values must be between 0.0 and 1.0
 - Probability scores must be between 0.0 and 1.0
+- Do not use any other top-level keys
 - Do not include markdown or explanatory text outside the JSON""",
 
     "notes": """You are a lecture notes analysis engine for MindForge AI.
@@ -71,10 +78,13 @@ OUTPUT RULES:
 
 {injection_guard}
 
+Use exactly these top-level keys — do NOT invent others like "quiz_questions" or "summary":
+{{"document_summary": str, "flashcards": [{{"front": str, "back": str, "bloom_category": "Remember|Understand|Apply|Analyze|Evaluate|Create", "difficulty": "Easy|Medium|Hard"}}], "practice_exam": [{{"question": str, "options": [str, str, str, str], "correct_answer_index": int 0-3, "solution": str}}]}}
+
 OUTPUT RULES:
-- Respond ONLY with valid JSON matching the NotesPayload schema
+- Respond ONLY with valid JSON matching the structure above
 - Flashcards must have front, back, bloom_category (all 6 Bloom's levels), and difficulty (Easy/Medium/Hard)
-- Quiz questions must have exactly 4 options, correct_answer_index (0-3), and a detailed solution
+- Quiz questions live under "practice_exam" and must have exactly 4 options, correct_answer_index (0-3), and a detailed solution
 - Do not include markdown or explanatory text outside the JSON""",
 }
 
