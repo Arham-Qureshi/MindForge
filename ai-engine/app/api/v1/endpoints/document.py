@@ -1,15 +1,17 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from uuid import uuid4
+
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from app.parsers.pdf_extractor import (
     extract_text_from_pdf_bytes,
     EncryptedPDFError,
     InsufficientTextError,
+    CorruptPDFError,
 )
 from app.classifiers.heuristic_engine import classify_document
 from app.pipelines.chunker import chunk_text
-from app.pipelines.syllabus_pipeline import process_syllabus
-from app.pipelines.pyq_pipeline import process_pyq
-from app.pipelines.notes_pipeline import process_notes
+from app.jobs.worker import TASK_MAP
 
 router = APIRouter()
 
@@ -17,7 +19,7 @@ MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 
 
 @router.post("/document/process")
-async def process_document(file: UploadFile = File(...)):
+async def process_document(request: Request, file: UploadFile = File(...)):
     if file.content_type != "application/pdf":
         raise HTTPException(
             status_code=415,
@@ -37,18 +39,29 @@ async def process_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail={"message": str(e)})
     except InsufficientTextError as e:
         raise HTTPException(status_code=422, detail={"message": str(e)})
+    except CorruptPDFError as e:
+        raise HTTPException(status_code=400, detail={"message": str(e)})
 
     classification = classify_document(text)
     chunks = chunk_text(text)
+    if not chunks:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Could not derive processable content from this PDF."},
+        )
 
-    pipeline_map = {
-        "SYLLABUS": process_syllabus,
-        "PYQ": process_pyq,
-        "NOTES": process_notes,
-    }
-    payload = pipeline_map[classification.doc_type](chunks)
+    doc_type = classification.doc_type
+    job_id = str(uuid4())
+    request.app.state.store.create_job(
+        job_id,
+        task=TASK_MAP[doc_type],
+        doc_type=doc_type,
+        chunks=chunks,
+        classification=classification.model_dump(),
+    )
+    request.app.state.worker.submit(job_id)
 
-    return {
-        "classification": classification.model_dump(),
-        "payload": payload.model_dump(),
-    }
+    return JSONResponse(
+        status_code=202,
+        content={"job_id": job_id, "chunks_total": len(chunks)},
+    )
