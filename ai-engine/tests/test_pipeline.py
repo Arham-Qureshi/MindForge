@@ -121,3 +121,68 @@ def test_execute_chunks_drops_empty_results():
         ]
         results = execute_chunks(mock_chunks, task="chunker")
         assert len(results) == 1
+
+
+def test_llm_client_routes_pyq_to_gemini():
+    mock_response = MagicMock()
+    mock_response.text = '{"result": "ok"}'
+    with patch("app.pipelines.llm_client.Groq") as MockGroq, \
+         patch("app.pipelines.llm_client.genai") as mock_genai:
+        mock_genai.Client.return_value.models.generate_content.return_value = mock_response
+        client = LLMClient()
+        result = client.complete(task="pyq", user="test", json_mode=True)
+        assert result == '{"result": "ok"}'
+        mock_genai.Client.return_value.models.generate_content.assert_called_once()
+        MockGroq.return_value.chat.completions.create.assert_not_called()
+
+
+def test_llm_client_routes_notes_to_groq():
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content='{"result": "ok"}'))]
+    with patch("app.pipelines.llm_client.Groq") as MockGroq, \
+         patch("app.pipelines.llm_client.genai") as mock_genai:
+        MockGroq.return_value.chat.completions.create.return_value = mock_response
+        client = LLMClient()
+        result = client.complete(task="notes", user="test")
+        assert result == '{"result": "ok"}'
+        MockGroq.return_value.chat.completions.create.assert_called_once()
+        mock_genai.Client.return_value.models.generate_content.assert_not_called()
+
+
+def test_llm_client_routes_syllabus_to_groq():
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content='{"result": "ok"}'))]
+    with patch("app.pipelines.llm_client.Groq") as MockGroq, \
+         patch("app.pipelines.llm_client.genai") as mock_genai:
+        MockGroq.return_value.chat.completions.create.return_value = mock_response
+        client = LLMClient()
+        result = client.complete(task="syllabus", user="test")
+        assert result == '{"result": "ok"}'
+        MockGroq.return_value.chat.completions.create.assert_called_once()
+        mock_genai.Client.return_value.models.generate_content.assert_not_called()
+
+
+def test_gemini_json_mode():
+    mock_response = MagicMock()
+    mock_response.text = '{"result": "ok"}'
+    with patch("app.pipelines.llm_client.Groq"), \
+         patch("app.pipelines.llm_client.genai") as mock_genai:
+        mock_genai.Client.return_value.models.generate_content.return_value = mock_response
+        client = LLMClient()
+        client.complete(task="pyq", user="test", json_mode=True)
+        call_args = mock_genai.Client.return_value.models.generate_content.call_args
+        config = call_args[1]["config"]
+        assert config.response_mime_type == "application/json"
+
+
+def test_gemini_no_json_mode():
+    mock_response = MagicMock()
+    mock_response.text = '{"result": "ok"}'
+    with patch("app.pipelines.llm_client.Groq"), \
+         patch("app.pipelines.llm_client.genai") as mock_genai:
+        mock_genai.Client.return_value.models.generate_content.return_value = mock_response
+        client = LLMClient()
+        client.complete(task="pyq", user="test", json_mode=False)
+        call_args = mock_genai.Client.return_value.models.generate_content.call_args
+        config = call_args[1]["config"]
+        assert config.response_mime_type is None

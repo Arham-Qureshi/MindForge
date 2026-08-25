@@ -48,4 +48,16 @@ describe("POST /process", () => {
     expect(res.status).toBe(503);
     expect(res.body.error).toBe("ERR_503");
   });
+
+  it("propagates upstream HTTP errors from the python engine", async () => {
+    const err = new proxyService.PythonEngineError(400, "ERR_400", "PDF is encrypted");
+    vi.spyOn(proxyService, "forwardToPythonEngine").mockRejectedValue(err);
+    const app = makeApp();
+    const res = await request(app)
+      .post("/process")
+      .attach("file", Buffer.from("%PDF-1.7\ncontent"), "doc.pdf");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("ERR_400");
+    expect(res.body.message).toBe("PDF is encrypted");
+  });
 });

@@ -1,10 +1,22 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useFileUpload } from '../../features/document-upload/hooks/useFileUpload';
+import type { EngineResponse } from '../../types/api.types';
 
-export default function Dropzone() {
-  const { status, statusMessage, error, upload, reset } = useFileUpload();
+type DropzoneProps = {
+  onProcessed?: (result: EngineResponse) => void;
+  onReset?: () => void;
+};
+
+export default function Dropzone({ onProcessed, onReset }: DropzoneProps) {
+  const { status, statusMessage, error, result, upload, reset } = useFileUpload();
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (status === 'done' && result && onProcessed) {
+      onProcessed(result);
+    }
+  }, [status, result, onProcessed]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -37,17 +49,23 @@ export default function Dropzone() {
     }
   };
 
+  const handleReset = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    reset();
+    if (onReset) onReset();
+  };
+
   const isProcessing = ['validating', 'uploading', 'classifying', 'extracting'].includes(status);
 
   return (
     <div className="mx-auto w-full max-w-2xl py-12">
       <div 
-        onClick={isProcessing ? undefined : triggerFileInput}
-        onDragOver={isProcessing ? undefined : handleDragOver}
-        onDragLeave={isProcessing ? undefined : handleDragLeave}
-        onDrop={isProcessing ? undefined : handleDrop}
+        onClick={isProcessing || status === 'done' ? undefined : triggerFileInput}
+        onDragOver={isProcessing || status === 'done' ? undefined : handleDragOver}
+        onDragLeave={isProcessing || status === 'done' ? undefined : handleDragLeave}
+        onDrop={isProcessing || status === 'done' ? undefined : handleDrop}
         className={`relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed bg-paper-white p-12 text-center transition-all duration-200 ${
-          isProcessing ? 'cursor-default border-ink-black shadow-hard-lg' :
+          isProcessing || status === 'done' ? 'cursor-default border-ink-black shadow-hard-lg' :
           isDragOver ? 'border-solid border-electric-iris shadow-hard-sm -translate-y-1 cursor-pointer' : 'border-ink-black/20 shadow-hard-lg hover-press cursor-pointer hover:border-electric-iris'
         }`}
       >
@@ -57,7 +75,7 @@ export default function Dropzone() {
           className="hidden" 
           accept="application/pdf"
           onChange={handleFileInputChange}
-          disabled={isProcessing}
+          disabled={isProcessing || status === 'done'}
         />
 
         {status === 'error' && (
@@ -65,7 +83,7 @@ export default function Dropzone() {
             <span className="material-symbols-outlined text-3xl">error</span>
             <p className="font-haas-grot-text font-bold">{error}</p>
             <button 
-              onClick={(e) => { e.stopPropagation(); reset(); }}
+              onClick={handleReset}
               className="mt-2 rounded-full border-2 border-marker-red bg-paper-white px-4 py-1 text-sm font-bold text-marker-red transition-transform hover:scale-105"
             >
               Try Again
@@ -92,6 +110,12 @@ export default function Dropzone() {
           <div className="flex flex-col items-center gap-4 py-8 text-jelly-green">
             <span className="material-symbols-outlined text-5xl">check_circle</span>
             <h3 className="font-haas-grot-disp text-2xl font-bold text-ink-black">Upload Complete!</h3>
+            <button 
+              onClick={handleReset}
+              className="mt-4 rounded-full border-2 border-ink-black bg-paper-white px-6 py-2 text-sm font-bold text-ink-black shadow-hard-sm hover-press"
+            >
+              Upload Another
+            </button>
           </div>
         )}
 

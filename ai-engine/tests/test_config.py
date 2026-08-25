@@ -2,7 +2,11 @@ from app.core.config import settings
 
 
 def test_settings_loads_default_model():
-    assert settings.DEFAULT_LLM_MODEL == "llama-3.1-70b-versatile"
+    assert settings.DEFAULT_LLM_MODEL == "openai/gpt-oss-120b"
+
+
+def test_settings_loads_gemini_model():
+    assert settings.GEMINI_MODEL == "gemini-2.5-flash"
 
 
 def test_settings_loads_cors_origins():
