@@ -1,7 +1,7 @@
 export const MAX_FILE_SIZE = 15 * 1024 * 1024;
 export const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
 export const RATE_LIMIT_MAX = 5;
-export const PY_PROXY_TIMEOUT_MS = 30 * 1000;
+export const PY_PROXY_TIMEOUT_MS = 120 * 1000;
 
 export const ERR = {
   NO_FILE: "ERR_400_NO_FILE",
