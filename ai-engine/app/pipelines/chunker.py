@@ -3,21 +3,24 @@ import re
 import numpy as np
 from fastembed import TextEmbedding
 
+from app.pipelines.tokens import count_tokens, CHUNK_TOKEN_BUDGET
+
 HEADING_SPLITTER = re.compile(
     r'\n{2,}|(?=(?:Module|Unit|Chapter|Section)\s+[0-9IVX]+)',
     re.IGNORECASE
 )
-
-MAX_CHUNK_TOKENS = 1500
-CHUNK_OVERLAP = 250
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
-SENTENCE_SPLITTER = re.compile(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s+')
+SENTENCE_SPLITTER = re.compile(r'(?<!\w\w\.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s+')
+FORCE_SPLIT_WORDS = CHUNK_TOKEN_BUDGET // 3
 
-_embedding_model = TextEmbedding(model_name=EMBEDDING_MODEL)
+_embedding_model = None
 
 
-def _estimate_tokens(text: str) -> int:
-    return int(len(text.split()) * 1.33)
+def _get_embedding_model():
+    global _embedding_model
+    if _embedding_model is None:
+        _embedding_model = TextEmbedding(model_name=EMBEDDING_MODEL)
+    return _embedding_model
 
 
 def _cosine_distance(v1: np.ndarray, v2: np.ndarray) -> float:
@@ -29,47 +32,69 @@ def _cosine_distance(v1: np.ndarray, v2: np.ndarray) -> float:
 def _structural_split(text: str) -> list[str]:
     if not text.strip():
         return []
-    chunks = HEADING_SPLITTER.split(text)
-    return [c.strip() for c in chunks if c.strip()]
+    return [c.strip() for c in HEADING_SPLITTER.split(text) if c.strip()]
 
 
-def _semantic_split(text: str, max_tokens: int = MAX_CHUNK_TOKENS) -> list[str]:
+def _force_word_split(text: str) -> list[str]:
+    words = text.split()
+    return [
+        " ".join(words[i:i + FORCE_SPLIT_WORDS])
+        for i in range(0, len(words), FORCE_SPLIT_WORDS)
+    ]
+
+
+def _pack(units: list[str], breaks: set[int] | None = None) -> list[str]:
+    # greedy pack by token budget; `breaks` forces a boundary before that unit index
+    chunks, current, current_tokens = [], [], 0
+    for i, u in enumerate(units):
+        t = count_tokens(u)
+        if current and (current_tokens + t > CHUNK_TOKEN_BUDGET or (breaks and i in breaks)):
+            chunks.append(" ".join(current))
+            current, current_tokens = [u], t
+        else:
+            current.append(u)
+            current_tokens += t
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
+
+
+def _semantic_split(text: str) -> list[str]:
+    if count_tokens(text) <= CHUNK_TOKEN_BUDGET:
+        return [text]
+
     sentences = [s.strip() for s in SENTENCE_SPLITTER.split(text) if s.strip()]
-    if len(sentences) <= 1:
-        words = text.split()
-        chunk_size = max(1, max_tokens // 2)
-        sentences = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
-        if len(sentences) <= 1:
-            return [text]
+    units: list[str] = []
+    forced = False
+    for s in sentences:
+        if count_tokens(s) <= CHUNK_TOKEN_BUDGET:
+            units.append(s)
+        else:
+            # arbitrary word windows carry no semantic signal; skip embeddings for them
+            units.extend(_force_word_split(s))
+            forced = True
 
-    embeddings = list(_embedding_model.embed(sentences))
+    if len(units) <= 1:
+        return _force_word_split(text)
+
+    if forced:
+        return _pack(units)
+
+    embeddings = list(_get_embedding_model().embed(units))
     distances = [
         _cosine_distance(embeddings[i], embeddings[i + 1])
         for i in range(len(embeddings) - 1)
     ]
     threshold = float(np.percentile(distances, 85)) if distances else 0.5
-
-    chunks, current, current_tokens = [], [sentences[0]], _estimate_tokens(sentences[0])
-
-    for i, dist in enumerate(distances):
-        next_tokens = _estimate_tokens(sentences[i + 1])
-        if dist > threshold or (current_tokens + next_tokens) > max_tokens:
-            chunks.append(" ".join(current))
-            current, current_tokens = [sentences[i + 1]], next_tokens
-        else:
-            current.append(sentences[i + 1])
-            current_tokens += next_tokens
-
-    if current:
-        chunks.append(" ".join(current))
-    return chunks
+    breaks = {i + 1 for i, d in enumerate(distances) if d > threshold}
+    return _pack(units, breaks)
 
 
 def chunk_text(text: str) -> list[str]:
     blocks = _structural_split(text)
     final = []
     for block in blocks:
-        if _estimate_tokens(block) > MAX_CHUNK_TOKENS:
+        if count_tokens(block) > CHUNK_TOKEN_BUDGET:
             final.extend(_semantic_split(block))
         else:
             final.append(block)
