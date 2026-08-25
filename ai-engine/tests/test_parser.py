@@ -99,3 +99,15 @@ def test_extract_text_from_pdf_bytes_large():
     raw = _make_pdf_bytes("word " * 20, pages=MAX_PAGES + 10)
     result = extract_text_from_pdf_bytes(raw)
     assert len(result) > 0
+
+
+def test_corrupt_pdf_raises_corrupt_error(caplog):
+    from app.parsers.pdf_extractor import extract_text_from_pdf_bytes, CorruptPDFError
+    import logging
+    import pytest
+
+    garbage = b"%PDF-1.7\nno actual objects here"
+    with caplog.at_level(logging.ERROR, logger="app.parsers.pdf_extractor"):
+        with pytest.raises(CorruptPDFError):
+            extract_text_from_pdf_bytes(garbage)
+    assert "31 bytes" in caplog.text
