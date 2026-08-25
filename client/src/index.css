@@ -94,7 +94,7 @@
     --radius-shapes: 0px;
     --radius-buttons: 48px;
 
-    /* Surfaces (from cssVariable.css) 
+    /* Surfaces (from cssVariable.css) */
     --surface-chalk-blue-canvas: #f0f6ff;
     --surface-paper-white-card: #ffffff;
     --surface-frost-blue-wash: #e1edff;
@@ -106,11 +106,11 @@
     .shadow-hard-sm {
         box-shadow: 4px 4px 0px 0px var(--color-ink-black);
     }
-    
+
     .shadow-hard-md {
         box-shadow: 8px 8px 0px 0px var(--color-ink-black);
     }
-    
+
     .shadow-hard-lg {
         box-shadow: 12px 12px 0px 0px var(--color-ink-black);
     }
@@ -118,12 +118,12 @@
     .hover-press {
         transition: transform 0.1s ease, box-shadow 0.1s ease;
     }
-    
+
     .hover-press:hover {
         transform: translate(2px, 2px);
         box-shadow: 2px 2px 0px 0px var(--color-ink-black) !important;
     }
-    
+
     .hover-press:active {
         transform: translate(4px, 4px);
         box-shadow: 0px 0px 0px 0px var(--color-ink-black) !important;
@@ -132,12 +132,12 @@
     .hover-press-md {
         transition: transform 0.1s ease, box-shadow 0.1s ease;
     }
-    
+
     .hover-press-md:hover {
         transform: translate(4px, 4px);
         box-shadow: 4px 4px 0px 0px var(--color-ink-black) !important;
     }
-    
+
     .hover-press-md:active {
         transform: translate(8px, 8px);
         box-shadow: 0px 0px 0px 0px var(--color-ink-black) !important;
@@ -146,12 +146,37 @@
     .clip-pentagon {
         clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
     }
-    
+
     .clip-triangle {
         clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
     }
-    
+
     .clip-star {
         clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    }
+
+    /* 3D Flip Card Utilities */
+    .perspective-1000 {
+        perspective: 1000px;
+    }
+
+    .transform-style-3d {
+        transform-style: preserve-3d;
+    }
+
+    .backface-hidden {
+        backface-visibility: hidden;
+    }
+
+    .rotate-y-180 {
+        transform: rotateY(180deg);
+    }
+
+    .flip-card-inner {
+        transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .flipped .flip-card-inner {
+        transform: rotateY(180deg);
     }
 }
