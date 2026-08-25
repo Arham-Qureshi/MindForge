@@ -28,8 +28,41 @@ describe("forwardToPythonEngine", () => {
     );
   });
 
-  it("rethrows other axios errors as-is", async () => {
-    const err = { isAxiosError: true, code: "ERR_BAD_RESPONSE" };
+  it("throws PythonEngineError with upstream status on HTTP error", async () => {
+    const err = {
+      isAxiosError: true,
+      code: "ERR_BAD_RESPONSE",
+      response: {
+        status: 415,
+        statusText: "Unsupported Media Type",
+        data: { detail: { message: "Only PDF files are accepted." } },
+      },
+    };
+    vi.spyOn(axios, "post").mockRejectedValue(err);
+    await expect(forwardToPythonEngine(Buffer.from("x"))).rejects.toMatchObject({
+      status: 415,
+      message: "Only PDF files are accepted.",
+    });
+  });
+
+  it("throws PythonEngineError for string detail", async () => {
+    const err = {
+      isAxiosError: true,
+      response: {
+        status: 400,
+        statusText: "Bad Request",
+        data: { detail: "PDF is encrypted" },
+      },
+    };
+    vi.spyOn(axios, "post").mockRejectedValue(err);
+    await expect(forwardToPythonEngine(Buffer.from("x"))).rejects.toMatchObject({
+      status: 400,
+      message: "PDF is encrypted",
+    });
+  });
+
+  it("rethrows non-axios errors as-is", async () => {
+    const err = new Error("unexpected");
     vi.spyOn(axios, "post").mockRejectedValue(err);
     await expect(forwardToPythonEngine(Buffer.from("x"))).rejects.toBe(err);
   });
