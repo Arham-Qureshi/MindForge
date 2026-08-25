@@ -26,14 +26,17 @@ describe("POST /process", () => {
     serverReq = undefined;
   });
 
-  it("forwards buffer and returns engine JSON, clearing req.file", async () => {
-    vi.spyOn(proxyService, "forwardToPythonEngine").mockResolvedValue({ docType: "NOTES" });
+  it("forwards buffer and passes through engine 202 + body, clearing req.file", async () => {
+    vi.spyOn(proxyService, "forwardToPythonEngine").mockResolvedValue({
+      status: 202,
+      data: { job_id: "abc-123", chunks_total: 4 },
+    });
     const app = makeApp();
     const res = await request(app)
       .post("/process")
       .attach("file", Buffer.from("%PDF-1.7\ncontent"), "doc.pdf");
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ docType: "NOTES" });
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ job_id: "abc-123", chunks_total: 4 });
     expect(proxyService.forwardToPythonEngine).toHaveBeenCalledOnce();
     expect(serverReq?.file).toBeUndefined();
   });
