@@ -69,4 +69,21 @@ export type EngineResponse = {
   payload: SyllabusPayload | PYQAnalysisPayload | NotesPayload;
 };
 
-export type UploadStatus = 'idle' | 'validating' | 'uploading' | 'classifying' | 'extracting' | 'done' | 'error';
+export type JobAccepted = {
+  job_id: string;
+  chunks_total: number;
+};
+
+export type JobState = 'queued' | 'processing' | 'done' | 'failed' | 'cancelled';
+
+export type JobStatus = {
+  status: JobState;
+  doc_type: DocType;
+  chunks_done: number;
+  chunks_total: number;
+  classification?: ClassificationResult;
+  payload?: SyllabusPayload | PYQAnalysisPayload | NotesPayload;
+  error?: string;
+};
+
+export type UploadStatus = 'idle' | 'uploading' | 'error';
