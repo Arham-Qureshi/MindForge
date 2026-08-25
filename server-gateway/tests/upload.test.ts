@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import request from "supertest";
 import express from "express";
 import { uploadMiddleware, validatePDFHeader } from "../src/middleware/upload.middleware.js";
