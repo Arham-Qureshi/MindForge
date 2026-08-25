@@ -9,8 +9,8 @@ export async function processDocument(req: Request, res: Response) {
       return res.status(400).json({ error: ERR.NO_FILE, message: "No file provided." });
     }
 
-    const result = await forwardToPythonEngine(fileBuffer);
-    return res.status(200).json(result);
+    const { status, data } = await forwardToPythonEngine(fileBuffer);
+    return res.status(status).json(data);
   } catch (err) {
     if (err instanceof PythonEngineDownError) {
       return res.status(503).json({ error: ERR.GATEWAY_DOWN, message: "AI Microservice offline" });
