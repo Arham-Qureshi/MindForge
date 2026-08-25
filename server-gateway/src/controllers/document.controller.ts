@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { forwardToPythonEngine, PythonEngineDownError } from "../services/pythonProxy.service.js";
+import { forwardToPythonEngine, PythonEngineDownError, PythonEngineError } from "../services/pythonProxy.service.js";
 import { ERR } from "../config/constants.js";
 
 export async function processDocument(req: Request, res: Response) {
@@ -14,6 +14,9 @@ export async function processDocument(req: Request, res: Response) {
   } catch (err) {
     if (err instanceof PythonEngineDownError) {
       return res.status(503).json({ error: ERR.GATEWAY_DOWN, message: "AI Microservice offline" });
+    }
+    if (err instanceof PythonEngineError) {
+      return res.status(err.status).json({ error: err.code, message: err.message });
     }
     console.error(err);
     return res.status(500).json({ error: "ERR_500_INTERNAL", message: "Internal Gateway Error" });
