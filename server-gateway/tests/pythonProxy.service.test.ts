@@ -7,10 +7,14 @@ describe("forwardToPythonEngine", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns engine response data on success", async () => {
-    vi.spyOn(axios, "post").mockResolvedValue({ data: { docType: "NOTES" } });
+  it("returns engine status + data on success", async () => {
+    vi.spyOn(axios, "post").mockResolvedValue({
+      status: 202,
+      data: { job_id: "abc", chunks_total: 3 },
+    });
     await expect(forwardToPythonEngine(Buffer.from("%PDF-1.7\ncontent"))).resolves.toEqual({
-      docType: "NOTES",
+      status: 202,
+      data: { job_id: "abc", chunks_total: 3 },
     });
   });
 
