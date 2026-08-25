@@ -179,4 +179,32 @@
     .flipped .flip-card-inner {
         transform: rotateY(180deg);
     }
+
+    /* Chunk progress boxes: a wave cycles through pending boxes first -> last */
+    .chunk-box {
+        width: 30px;
+        height: 14px;
+        border-radius: 5px;
+        border: 2px solid var(--color-ink-black);
+    }
+
+    .chunk-done {
+        background: var(--color-jelly-green);
+    }
+
+    .chunk-pending {
+        background: var(--color-paper-white);
+        animation: chunk-wave 1.4s ease-in-out infinite;
+    }
+
+    @keyframes chunk-wave {
+        0%, 100% {
+            background: var(--color-paper-white);
+            transform: translateY(0);
+        }
+        50% {
+            background: var(--color-electric-iris);
+            transform: translateY(-4px);
+        }
+    }
 }

@@ -1,163 +1,125 @@
-import pytest
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
+from unittest.mock import MagicMock, patch
 
-from app.app import create_app
+from app.parsers.pdf_extractor import EncryptedPDFError, InsufficientTextError
+from tests.conftest import VALID_PAYLOADS
 
-
-@pytest.fixture()
-def client():
-    return TestClient(create_app())
+PDF_BYTES = b"%PDF-1.7\n" + b"x" * 100
 
 
-MOCK_CLASSIFICATION = {
-    "doc_type": "SYLLABUS",
-    "confidence": 0.85,
-    "metrics": {"syllabus": {"count": 12, "matched_markers": ["module", "unit"]}},
-}
-
-
-@patch("app.api.v1.endpoints.document.process_notes")
-@patch("app.api.v1.endpoints.document.process_pyq")
-@patch("app.api.v1.endpoints.document.process_syllabus")
-@patch("app.api.v1.endpoints.document.chunk_text")
-@patch("app.api.v1.endpoints.document.classify_document")
-@patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes")
-def test_process_syllabus_returns_200(
-    mock_extract, mock_classify, mock_chunk, mock_syllabus, mock_pyq, mock_notes, client
-):
-    mock_extract.return_value = "Syllabus content with enough words to pass validation checks."
-    mock_classify.return_value = MagicMock(
-        doc_type="SYLLABUS",
-        confidence=0.85,
-        metrics={"syllabus": {"count": 12, "matched_markers": ["module"]}},
-        model_dump=MagicMock(return_value=MOCK_CLASSIFICATION),
+def classification_mock(doc_type="NOTES", confidence=0.8):
+    m = MagicMock(
+        doc_type=doc_type,
+        confidence=confidence,
+        metrics={"x": {"count": 1, "matched_markers": []}},
     )
-    mock_chunk.return_value = ["chunk1"]
-    mock_syllabus.return_value = MagicMock(
-        model_dump=MagicMock(return_value={"course_title": "DS", "total_units": 5, "learning_path": [], "priority_topics": []})
-    )
-
-    pdf_bytes = b"%PDF-1.7\n" + b"x" * 100
-    res = client.post(
-        "/api/v1/document/process",
-        files={"file": ("test.pdf", pdf_bytes, "application/pdf")},
-    )
-
-    assert res.status_code == 200
-    data = res.json()
-    assert "classification" in data
-    assert "payload" in data
-    assert data["classification"]["doc_type"] == "SYLLABUS"
-    mock_syllabus.assert_called_once()
-    mock_pyq.assert_not_called()
-    mock_notes.assert_not_called()
+    m.model_dump.return_value = {
+        "doc_type": doc_type,
+        "confidence": confidence,
+        "metrics": {},
+    }
+    return m
 
 
-@patch("app.api.v1.endpoints.document.process_notes")
-@patch("app.api.v1.endpoints.document.process_pyq")
-@patch("app.api.v1.endpoints.document.process_syllabus")
-@patch("app.api.v1.endpoints.document.chunk_text")
-@patch("app.api.v1.endpoints.document.classify_document")
-@patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes")
-def test_process_routes_to_pyq(
-    mock_extract, mock_classify, mock_chunk, mock_syllabus, mock_pyq, mock_notes, client
-):
-    mock_extract.return_value = "PYQ questions content with enough words."
-    mock_classify.return_value = MagicMock(
-        doc_type="PYQ",
-        confidence=0.9,
-        metrics={"pyq": {"count": 8, "matched_markers": ["question"]}},
-        model_dump=MagicMock(return_value={"doc_type": "PYQ", "confidence": 0.9, "metrics": {}}),
-    )
-    mock_chunk.return_value = ["chunk1"]
-    mock_pyq.return_value = MagicMock(
-        model_dump=MagicMock(return_value={"topic_frequency": [], "predicted_questions": []})
-    )
-
-    pdf_bytes = b"%PDF-1.7\n" + b"x" * 100
-    res = client.post(
-        "/api/v1/document/process",
-        files={"file": ("test.pdf", pdf_bytes, "application/pdf")},
-    )
-
-    assert res.status_code == 200
-    mock_pyq.assert_called_once()
-    mock_syllabus.assert_not_called()
-    mock_notes.assert_not_called()
+def post_pdf(client, doc_type="NOTES"):
+    with (
+        patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes") as mock_extract,
+        patch("app.api.v1.endpoints.document.classify_document") as mock_classify,
+        patch("app.api.v1.endpoints.document.chunk_text") as mock_chunk,
+    ):
+        mock_extract.return_value = "enough words " * 20
+        mock_classify.return_value = classification_mock(doc_type)
+        mock_chunk.return_value = ["chunk-one", "chunk-two"]
+        return client.post(
+            "/api/v1/document/process",
+            files={"file": ("test.pdf", PDF_BYTES, "application/pdf")},
+        )
 
 
-@patch("app.api.v1.endpoints.document.process_notes")
-@patch("app.api.v1.endpoints.document.process_pyq")
-@patch("app.api.v1.endpoints.document.process_syllabus")
-@patch("app.api.v1.endpoints.document.chunk_text")
-@patch("app.api.v1.endpoints.document.classify_document")
-@patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes")
-def test_process_routes_to_notes(
-    mock_extract, mock_classify, mock_chunk, mock_syllabus, mock_pyq, mock_notes, client
-):
-    mock_extract.return_value = "Lecture notes content with enough words."
-    mock_classify.return_value = MagicMock(
-        doc_type="NOTES",
-        confidence=0.7,
-        metrics={"notes": {"count": 5, "matched_markers": ["definition"]}},
-        model_dump=MagicMock(return_value={"doc_type": "NOTES", "confidence": 0.7, "metrics": {}}),
-    )
-    mock_chunk.return_value = ["chunk1"]
-    mock_notes.return_value = MagicMock(
-        model_dump=MagicMock(return_value={"document_summary": "ok", "flashcards": [], "practice_exam": []})
-    )
+def test_process_returns_202_with_job_id(make_client):
+    client = make_client([VALID_PAYLOADS["NOTES"]])
+    res = post_pdf(client, "NOTES")
 
-    pdf_bytes = b"%PDF-1.7\n" + b"x" * 100
-    res = client.post(
-        "/api/v1/document/process",
-        files={"file": ("test.pdf", pdf_bytes, "application/pdf")},
-    )
-
-    assert res.status_code == 200
-    mock_notes.assert_called_once()
-    mock_syllabus.assert_not_called()
-    mock_pyq.assert_not_called()
+    assert res.status_code == 202
+    body = res.json()
+    assert "job_id" in body
+    assert body["chunks_total"] == 2
+    job = client.app.state.store.get_job(body["job_id"])
+    assert job["doc_type"] == "NOTES"
+    assert job["task"] == "notes"
 
 
-@patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes")
-def test_encrypted_pdf_returns_400(mock_extract, client):
-    from app.parsers.pdf_extractor import EncryptedPDFError
+def test_process_end_to_end_reaches_done_with_payload(make_client):
+    client = make_client([VALID_PAYLOADS["SYLLABUS"]])
+    res = post_pdf(client, "SYLLABUS")
+    job_id = res.json()["job_id"]
 
-    mock_extract.side_effect = EncryptedPDFError("PDF is encrypted")
-    pdf_bytes = b"%PDF-1.7\n" + b"x" * 100
-    res = client.post(
-        "/api/v1/document/process",
-        files={"file": ("encrypted.pdf", pdf_bytes, "application/pdf")},
-    )
+    client.app.state.worker.process_job_sync(job_id)
 
+    status = client.get(f"/api/v1/jobs/{job_id}").json()
+    assert status["status"] == "done"
+    assert status["payload"]["course_title"] == "DS"
+
+
+def test_llm_failure_surfaces_error_not_blank(make_client):
+    from app.pipelines.llm_client import LLMError
+
+    client = make_client([LLMError(400, "invalid api key", "groq", retryable=False)])
+    res = post_pdf(client, "NOTES")
+    job_id = res.json()["job_id"]
+
+    client.app.state.worker.process_job_sync(job_id)
+
+    status = client.get(f"/api/v1/jobs/{job_id}").json()
+    assert status["status"] == "failed"
+    assert "invalid api key" in status["error"]
+    assert "payload" not in status
+
+
+def test_encrypted_pdf_returns_400(make_client):
+    client = make_client([])
+    with patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes") as mock_extract:
+        mock_extract.side_effect = EncryptedPDFError("PDF is encrypted")
+        res = client.post(
+            "/api/v1/document/process",
+            files={"file": ("e.pdf", PDF_BYTES, "application/pdf")},
+        )
     assert res.status_code == 400
     assert "encrypted" in res.json()["detail"]["message"].lower()
 
 
-@patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes")
-def test_insufficient_text_returns_422(mock_extract, client):
-    from app.parsers.pdf_extractor import InsufficientTextError
-
-    mock_extract.side_effect = InsufficientTextError("Not enough text")
-    pdf_bytes = b"%PDF-1.7\n" + b"x" * 100
-    res = client.post(
-        "/api/v1/document/process",
-        files={"file": ("empty.pdf", pdf_bytes, "application/pdf")},
-    )
-
+def test_insufficient_text_returns_422(make_client):
+    client = make_client([])
+    with patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes") as mock_extract:
+        mock_extract.side_effect = InsufficientTextError("Not enough text")
+        res = client.post(
+            "/api/v1/document/process",
+            files={"file": ("empty.pdf", PDF_BYTES, "application/pdf")},
+        )
     assert res.status_code == 422
     assert "text" in res.json()["detail"]["message"].lower()
 
 
-def test_no_file_returns_422(client):
+def test_no_file_returns_422(make_client):
+    client = make_client([])
     res = client.post("/api/v1/document/process")
     assert res.status_code == 422
 
 
-def test_non_pdf_returns_415(client):
+def test_non_pdf_returns_415(make_client):
+    client = make_client([])
     res = client.post(
         "/api/v1/document/process",
         files={"file": ("readme.txt", b"hello world", "text/plain")},
     )
     assert res.status_code == 415
+
+
+def test_corrupt_pdf_bytes_return_400_not_500(make_client):
+    client = make_client([])
+    garbage = b"%PDF-1.7\nthis is definitely not a real pdf body"
+    res = client.post(
+        "/api/v1/document/process",
+        files={"file": ("broken.pdf", garbage, "application/pdf")},
+    )
+    assert res.status_code == 400
+    assert "corrupt" in res.json()["detail"]["message"].lower()

@@ -25,7 +25,7 @@ def execute_chunks(
         for attempt in range(max_retries):
             try:
                 raw = llm_client.complete(task=task, user=chunk_text, json_mode=True)
-                data = json.loads(raw)
+                data = json.loads(raw.content)
                 if schema:
                     validated = schema.model_validate(data)
                     return validated.model_dump()
