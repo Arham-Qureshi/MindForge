@@ -1,4 +1,4 @@
-import type { JobAccepted, JobStatus } from "../types/api.types";
+import type { JobAccepted, JobStatus, ProcessingMode } from "../types/api.types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -27,11 +27,16 @@ async function errorFrom(response: Response): Promise<DocumentUploadError> {
 }
 
 export const documentService = {
-  async processDocument(file: File): Promise<JobAccepted> {
+  async processDocument(file: File, mode: ProcessingMode, flashcardCount?: number): Promise<JobAccepted> {
+    const params = new URLSearchParams({ mode });
+    if (mode === 'notes' && flashcardCount) {
+      params.set("flashcard_count", String(flashcardCount));
+    }
+
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch(`${API_URL}/api/document/process`, {
+    const response = await fetch(`${API_URL}/api/document/process?${params}`, {
       method: "POST",
       body: formData,
     });
