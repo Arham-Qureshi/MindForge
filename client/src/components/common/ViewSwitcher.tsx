@@ -1,4 +1,6 @@
 import type { EngineResponse, SyllabusPayload, PYQAnalysisPayload, NotesPayload } from "../../types/api.types";
+import type { ExportPayload } from "../../types/export";
+import { exportStudyAssets } from "../../services/exportService";
 import SyllabusView from "../../features/syllabus-view/SyllabusView";
 import PYQView from "../../features/pyq-view/PYQView";
 import NotesView from "../../features/notes-view/NotesView";
@@ -30,6 +32,27 @@ export default function ViewSwitcher({ data, onReset }: ViewSwitcherProps) {
             <span className="font-martian-mono text-xs font-bold text-paper-white">
               {(classification.confidence * 100).toFixed(0)}% Match
             </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => payload && exportStudyAssets(payload as ExportPayload, { format: 'pdf', docType: classification.doc_type })}
+              disabled={!payload}
+              className="hover-press flex items-center gap-1.5 rounded-full border-2 border-ink-black bg-paper-white px-3 py-1.5 font-haas-grot-text text-xs font-bold text-ink-black shadow-hard-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+              PDF
+            </button>
+            {(classification.doc_type === 'NOTES' || classification.doc_type === 'PYQ') && (
+              <button
+                onClick={() => payload && exportStudyAssets(payload as ExportPayload, { format: 'csv', docType: classification.doc_type })}
+                disabled={!payload}
+                className="hover-press flex items-center gap-1.5 rounded-full border-2 border-ink-black bg-paper-white px-3 py-1.5 font-haas-grot-text text-xs font-bold text-ink-black shadow-hard-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-[16px]">description</span>
+                CSV
+              </button>
+            )}
           </div>
           
           <button 
