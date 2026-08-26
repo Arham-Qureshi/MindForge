@@ -1,10 +1,16 @@
 import { useState } from 'react';
-import type { JobAccepted, UploadStatus } from '../../../types/api.types';
+import type { JobAccepted, ProcessingMode, UploadStatus } from '../../../types/api.types';
 import { documentService, DocumentUploadError } from '../../../services/documentService';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
 
-export function useFileUpload(onAccepted?: (job: JobAccepted) => void) {
+export type UseFileUploadOptions = {
+  onAccepted?: (job: JobAccepted) => void;
+  mode: ProcessingMode;
+  flashcardCount?: number;
+};
+
+export function useFileUpload({ onAccepted, mode, flashcardCount }: UseFileUploadOptions) {
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +42,7 @@ export function useFileUpload(onAccepted?: (job: JobAccepted) => void) {
 
     try {
       // engine replies 202 fast; chunk progress arrives via job polling
-      const job = await documentService.processDocument(file);
+      const job = await documentService.processDocument(file, mode, flashcardCount);
       if (onAccepted) onAccepted(job);
     } catch (err) {
       setStatus('error');
