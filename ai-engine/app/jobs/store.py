@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     doc_type TEXT NOT NULL,
     chunks_total INTEGER NOT NULL,
     chunks_done INTEGER NOT NULL DEFAULT 0,
+    user_mode TEXT NOT NULL DEFAULT '',
+    flashcard_count INTEGER NOT NULL DEFAULT 10,
     payload TEXT,
     error TEXT,
     classification TEXT,
@@ -58,8 +60,15 @@ class Store:
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
             try:
-                # migrate dbs created before classification was stored
                 conn.execute("ALTER TABLE jobs ADD COLUMN classification TEXT")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN user_mode TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN flashcard_count INTEGER NOT NULL DEFAULT 10")
             except sqlite3.OperationalError:
                 pass
 
@@ -71,11 +80,13 @@ class Store:
         return conn
 
     def create_job(self, job_id: str, task: str, doc_type: str, chunks: list[str],
-                   classification: dict | None = None, created_at: float | None = None):
+                   classification: dict | None = None, created_at: float | None = None,
+                   user_mode: str = "", flashcard_count: int = 10):
         with self._lock, self._conn() as conn:
             conn.execute(
-                "INSERT INTO jobs (id, task, doc_type, chunks_total, classification, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jobs (id, task, doc_type, chunks_total, classification, created_at,"
+                " user_mode, flashcard_count)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     job_id,
                     task,
@@ -83,6 +94,8 @@ class Store:
                     len(chunks),
                     json.dumps(classification) if classification else None,
                     created_at or time.time(),
+                    user_mode or doc_type,
+                    flashcard_count,
                 ),
             )
             conn.executemany(
