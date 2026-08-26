@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { documentService } from '../services/documentService';
-import type { EngineResponse, JobAccepted } from '../types/api.types';
+import type { EngineResponse, JobAccepted, ProcessingMode } from '../types/api.types';
 
 const STORAGE_KEY = 'mf.active_job';
 const POLL_MS = 2000;
@@ -9,7 +9,7 @@ const MAX_CONSECUTIVE_ERRORS = 10; // ~20s of dead gateway before we give up
 export type SessionPhase =
   | { kind: 'idle' }
   | { kind: 'processing'; job: JobAccepted; chunksDone: number }
-  | { kind: 'ready'; data: EngineResponse }
+  | { kind: 'ready'; data: EngineResponse; file?: File }
   | { kind: 'failed'; message: string };
 
 function readSavedJob(): JobAccepted | null {
@@ -27,27 +27,45 @@ function readSavedJob(): JobAccepted | null {
 
 export function useJobSession() {
   const [activeJob, setActiveJob] = useState<JobAccepted | null>(readSavedJob);
+  const activeFileRef = useRef<File | null>(null);
   const [phase, setPhase] = useState<SessionPhase>(() => {
     const saved = readSavedJob();
     return saved ? { kind: 'processing', job: saved, chunksDone: 0 } : { kind: 'idle' };
   });
 
-  const startJob = useCallback((job: JobAccepted) => {
+  const startJob = useCallback((job: JobAccepted, file?: File) => {
+    activeFileRef.current = file ?? null;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(job));
     setPhase({ kind: 'processing', job, chunksDone: 0 });
     setActiveJob(job);
   }, []);
 
   const reset = useCallback(() => {
+    activeFileRef.current = null;
     window.localStorage.removeItem(STORAGE_KEY);
     setActiveJob(null);
     setPhase({ kind: 'idle' });
+  }, []);
+
+  const generateMore = useCallback(async (mode: ProcessingMode, flashcardCount?: number) => {
+    const file = activeFileRef.current;
+    if (!file) return;
+    try {
+      const job = await documentService.processDocument(file, mode, flashcardCount);
+      activeFileRef.current = file;
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(job));
+      setPhase({ kind: 'processing', job, chunksDone: 0 });
+      setActiveJob(job);
+    } catch {
+      // upload failed — keep current phase, caller can handle via upload error state
+    }
   }, []);
 
   // stop polling instantly, clear the session, then best-effort cancel server-side
   // so the engine stops burning provider quota on an abandoned job
   const kill = useCallback(async () => {
     const job = activeJob;
+    activeFileRef.current = null;
     window.localStorage.removeItem(STORAGE_KEY);
     setActiveJob(null);
     setPhase({ kind: 'idle' });
@@ -72,6 +90,7 @@ export function useJobSession() {
         consecutiveErrors = 0;
 
         if (status.status === 'done' && status.payload && status.classification) {
+          const savedFile = activeFileRef.current;
           window.localStorage.removeItem(STORAGE_KEY);
           setActiveJob(null);
           setPhase({
@@ -80,6 +99,7 @@ export function useJobSession() {
               classification: status.classification,
               payload: status.payload,
             },
+            file: savedFile ?? undefined,
           });
         } else if (status.status === 'failed') {
           window.localStorage.removeItem(STORAGE_KEY);
@@ -111,5 +131,5 @@ export function useJobSession() {
     };
   }, [activeJob]);
 
-  return { phase, startJob, reset, kill };
+  return { phase, startJob, reset, kill, generateMore };
 }
