@@ -56,6 +56,8 @@ export type NotesPayload = {
   practice_exam: QuizQuestion[];
 };
 
+export type ProcessingMode = 'notes' | 'pyq' | 'syllabus';
+
 export type DocType = 'SYLLABUS' | 'PYQ' | 'NOTES';
 
 export type ClassificationResult = {
@@ -72,6 +74,7 @@ export type EngineResponse = {
 export type JobAccepted = {
   job_id: string;
   chunks_total: number;
+  mode_mismatch?: boolean;
 };
 
 export type JobState = 'queued' | 'processing' | 'done' | 'failed' | 'cancelled';
@@ -79,6 +82,7 @@ export type JobState = 'queued' | 'processing' | 'done' | 'failed' | 'cancelled'
 export type JobStatus = {
   status: JobState;
   doc_type: DocType;
+  user_mode: ProcessingMode;
   chunks_done: number;
   chunks_total: number;
   classification?: ClassificationResult;
