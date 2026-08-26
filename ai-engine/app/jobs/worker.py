@@ -98,7 +98,7 @@ class Worker:
         if not job or job["status"] in ("done", "failed", "cancelled"):
             return
 
-        task = TASK_MAP[job["doc_type"]]
+        task = job.get("task") or TASK_MAP[job["doc_type"]]
         self.store.mark_processing(job_id)
         deadline = time.time() + self.deadline_seconds
 
@@ -117,7 +117,7 @@ class Worker:
             batch = pending[:POOL_SIZE]
             done_before = self.store.get_job(job_id)["chunks_done"]
             with ThreadPoolExecutor(max_workers=len(batch)) as pool:
-                list(pool.map(lambda c: self._process_chunk(job_id, task, c), batch))
+                list(pool.map(lambda c: self._process_chunk(job_id, task, c, job), batch))
 
             # fatal/quota failures mark the job failed mid-flight; stop immediately
             status_after = self.store.get_job(job_id)["status"]
@@ -142,14 +142,18 @@ class Worker:
         payload = MERGE_FNS[task](results)
         self.store.set_job_payload(job_id, payload.model_dump_json())
 
-    def _process_chunk(self, job_id: str, task: str, chunk: dict):
+    def _process_chunk(self, job_id: str, task: str, chunk: dict, job: dict | None = None):
         provider = PROVIDER_ROUTES.get(task, "groq")
         idx = chunk["idx"]
+        chunk_text = chunk["text"]
+        if task == "notes" and job:
+            count = job.get("flashcard_count", 10)
+            chunk_text = f"Generate exactly {count} flashcards.\n\n{chunk_text}"
         try:
-            est = self.llm.estimate_request_tokens(task, chunk["text"])
+            est = self.llm.estimate_request_tokens(task, chunk_text)
             self.limiter.acquire(provider, est)
 
-            result = self.llm.complete(task=task, user=chunk["text"], json_mode=True)
+            result = self.llm.complete(task=task, user=chunk_text, json_mode=True)
             data = json.loads(result.content)
             validated = SCHEMAS[task].model_validate(data).model_dump()
 
