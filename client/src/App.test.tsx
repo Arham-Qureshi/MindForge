@@ -12,10 +12,10 @@ describe("App shell", () => {
 
   it("renders the ticker copy", () => {
     render(<App />);
-    expect(
-      screen.getByText("New! AI study assets for Database Systems"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("100% Private & Local")).toBeInTheDocument();
+    const phrases = screen.getAllByText("Turn syllabi into structured study plans");
+    expect(phrases.length).toBeGreaterThanOrEqual(1);
+    const privacy = screen.getAllByText("100% local — your PDFs never leave your machine");
+    expect(privacy.length).toBeGreaterThanOrEqual(1);
   });
 
   it("lays out banner before main before contentinfo", () => {
@@ -27,5 +27,12 @@ describe("App shell", () => {
       (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     expect(follows(banner, main)).toBe(true);
     expect(follows(main, contentinfo)).toBe(true);
+  });
+
+  it("renders ModeSelector with all three tabs", () => {
+    render(<App />);
+    expect(screen.getByRole("button", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "PYQ" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Syllabus Graph" })).toBeInTheDocument();
   });
 });
