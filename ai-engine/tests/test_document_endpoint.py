@@ -20,7 +20,7 @@ def classification_mock(doc_type="NOTES", confidence=0.8):
     return m
 
 
-def post_pdf(client, doc_type="NOTES"):
+def post_pdf(client, doc_type="NOTES", mode="notes"):
     with (
         patch("app.api.v1.endpoints.document.extract_text_from_pdf_bytes") as mock_extract,
         patch("app.api.v1.endpoints.document.classify_document") as mock_classify,
@@ -32,6 +32,7 @@ def post_pdf(client, doc_type="NOTES"):
         return client.post(
             "/api/v1/document/process",
             files={"file": ("test.pdf", PDF_BYTES, "application/pdf")},
+            params={"mode": mode},
         )
 
 
@@ -50,7 +51,7 @@ def test_process_returns_202_with_job_id(make_client):
 
 def test_process_end_to_end_reaches_done_with_payload(make_client):
     client = make_client([VALID_PAYLOADS["SYLLABUS"]])
-    res = post_pdf(client, "SYLLABUS")
+    res = post_pdf(client, "SYLLABUS", mode="syllabus")
     job_id = res.json()["job_id"]
 
     client.app.state.worker.process_job_sync(job_id)
@@ -82,6 +83,7 @@ def test_encrypted_pdf_returns_400(make_client):
         res = client.post(
             "/api/v1/document/process",
             files={"file": ("e.pdf", PDF_BYTES, "application/pdf")},
+            params={"mode": "notes"},
         )
     assert res.status_code == 400
     assert "encrypted" in res.json()["detail"]["message"].lower()
@@ -94,6 +96,7 @@ def test_insufficient_text_returns_422(make_client):
         res = client.post(
             "/api/v1/document/process",
             files={"file": ("empty.pdf", PDF_BYTES, "application/pdf")},
+            params={"mode": "notes"},
         )
     assert res.status_code == 422
     assert "text" in res.json()["detail"]["message"].lower()
@@ -110,6 +113,7 @@ def test_non_pdf_returns_415(make_client):
     res = client.post(
         "/api/v1/document/process",
         files={"file": ("readme.txt", b"hello world", "text/plain")},
+        params={"mode": "notes"},
     )
     assert res.status_code == 415
 
@@ -120,6 +124,7 @@ def test_corrupt_pdf_bytes_return_400_not_500(make_client):
     res = client.post(
         "/api/v1/document/process",
         files={"file": ("broken.pdf", garbage, "application/pdf")},
+        params={"mode": "notes"},
     )
     assert res.status_code == 400
     assert "corrupt" in res.json()["detail"]["message"].lower()
