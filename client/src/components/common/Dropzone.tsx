@@ -1,14 +1,35 @@
 import { useRef, useState } from 'react';
 import { useFileUpload } from '../../features/document-upload/hooks/useFileUpload';
-import type { JobAccepted } from '../../types/api.types';
+import type { JobAccepted, ProcessingMode } from '../../types/api.types';
+
+const MODE_CONTENT: Record<ProcessingMode, { title: string; description: string; button: string }> = {
+  notes: {
+    title: 'Notes & Flashcard Generator',
+    description: 'Upload lecture notes, textbooks, or study materials to generate summaries and flashcards.',
+    button: 'Generate Study Notes',
+  },
+  pyq: {
+    title: 'Past Year Question Analyzer',
+    description: 'Upload past exam papers to analyze question patterns and predict likely questions.',
+    button: 'Analyze Past Papers',
+  },
+  syllabus: {
+    title: 'Syllabus Roadmap Builder',
+    description: 'Upload your course syllabus to generate a structured learning path with priority topics.',
+    button: 'Build Roadmap',
+  },
+};
 
 type DropzoneProps = {
   onAccepted?: (job: JobAccepted) => void;
   onReset?: () => void;
+  mode: ProcessingMode;
+  flashcardCount: number;
+  onFlashcardCountChange: (count: number) => void;
 };
 
-export default function Dropzone({ onAccepted, onReset }: DropzoneProps) {
-  const { status, error, upload, reset } = useFileUpload(onAccepted);
+export default function Dropzone({ onAccepted, onReset, mode, flashcardCount, onFlashcardCountChange }: DropzoneProps) {
+  const { status, error, upload, reset } = useFileUpload({ onAccepted, mode, flashcardCount });
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -99,14 +120,36 @@ export default function Dropzone({ onAccepted, onReset }: DropzoneProps) {
               <span className="material-symbols-outlined text-3xl">upload_file</span>
             </div>
 
-            <h2 className="mb-2 font-haas-grot-disp text-2xl font-bold text-ink-black">Drop Box & Syllabus Uploader</h2>
-            <p className="mb-8 font-haas-grot-text text-lg text-ink-black/70">Drag and drop your PDFs here.</p>
+            <h2 className="mb-2 font-haas-grot-disp text-2xl font-bold text-ink-black">{MODE_CONTENT[mode].title}</h2>
+            <p className="mb-8 font-haas-grot-text text-lg text-ink-black/70">{MODE_CONTENT[mode].description}</p>
+
+            {mode === 'notes' && (
+              <div className="mb-4 flex items-center gap-3">
+                <span className="font-haas-grot-text text-sm font-bold text-ink-black">Flashcards:</span>
+                {[5, 10, 15].map((count) => (
+                  <button
+                    key={count}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onFlashcardCountChange(count);
+                    }}
+                    className={`rounded-full border-2 border-ink-black px-3 py-1 font-martian-mono text-sm font-bold transition-colors ${
+                      flashcardCount === count
+                        ? 'bg-electric-iris text-paper-white'
+                        : 'bg-paper-white text-ink-black hover:bg-frost-blue'
+                    }`}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <button
               onClick={(e) => { e.stopPropagation(); triggerFileInput(); }}
               className="hover-press mb-4 flex items-center gap-2 rounded-full border-2 border-ink-black bg-electric-iris px-8 py-3 font-haas-grot-text text-lg font-bold text-paper-white shadow-hard-md"
             >
-              Process Material with Groq
+              {MODE_CONTENT[mode].button}
               <span className="material-symbols-outlined">arrow_forward</span>
             </button>
 
