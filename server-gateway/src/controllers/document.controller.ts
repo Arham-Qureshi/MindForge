@@ -9,7 +9,15 @@ export async function processDocument(req: Request, res: Response) {
       return res.status(400).json({ error: ERR.NO_FILE, message: "No file provided." });
     }
 
-    const { status, data } = await forwardToPythonEngine(fileBuffer);
+    const mode = req.query.mode as string | undefined;
+    const flashcardCount = req.query.flashcard_count
+      ? Number(req.query.flashcard_count)
+      : undefined;
+
+    const { status, data } = await forwardToPythonEngine(fileBuffer, {
+      mode,
+      flashcardCount,
+    });
     return res.status(status).json(data);
   } catch (err) {
     if (err instanceof PythonEngineDownError) {

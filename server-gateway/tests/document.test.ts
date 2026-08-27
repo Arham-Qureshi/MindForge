@@ -63,4 +63,19 @@ describe("POST /process", () => {
     expect(res.body.error).toBe("ERR_400");
     expect(res.body.message).toBe("PDF is encrypted");
   });
+
+  it("forwards mode and flashcard_count query params to the engine", async () => {
+    vi.spyOn(proxyService, "forwardToPythonEngine").mockResolvedValue({
+      status: 202,
+      data: { job_id: "test-123", chunks_total: 1 },
+    });
+    const app = makeApp();
+    await request(app)
+      .post("/process?mode=notes&flashcard_count=15")
+      .attach("file", Buffer.from("%PDF-1.7\ncontent"), "doc.pdf");
+    expect(proxyService.forwardToPythonEngine).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      { mode: "notes", flashcardCount: 15 },
+    );
+  });
 });
