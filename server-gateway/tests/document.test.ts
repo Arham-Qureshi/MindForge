@@ -78,4 +78,20 @@ describe("POST /process", () => {
       { mode: "notes", flashcardCount: 15 },
     );
   });
+
+  it("accepts 3 PDFs as multi-upload for pyq", async () => {
+    vi.spyOn(proxyService, "forwardToPythonEngine").mockResolvedValue({
+      status: 202,
+      data: { job_id: "multi-123", chunks_total: 6 },
+    });
+    const app = makeApp();
+    const res = await request(app)
+      .post("/process?mode=pyq")
+      .attach("files", Buffer.from("%PDF-1.7\ncontent1"), "a.pdf")
+      .attach("files", Buffer.from("%PDF-1.7\ncontent2"), "b.pdf")
+      .attach("files", Buffer.from("%PDF-1.7\ncontent3"), "c.pdf");
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ job_id: "multi-123", chunks_total: 6 });
+    expect(proxyService.forwardToPythonEngine).toHaveBeenCalled();
+  });
 });
