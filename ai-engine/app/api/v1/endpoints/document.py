@@ -23,7 +23,8 @@ VALID_MODES = {"syllabus", "pyq", "notes"}
 @router.post("/document/process")
 async def process_document(
     request: Request,
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(default=None),
+    files: list[UploadFile] | None = File(default=None),
     mode: str = Query(...),
     flashcard_count: int = Query(10),
     notes_subtask: str = Query(""),
@@ -44,31 +45,48 @@ async def process_document(
             detail={"message": "notes_subtask must be one of flashcards, exam, summary, or empty"},
         )
 
-    if file.content_type != "application/pdf":
-        raise HTTPException(
-            status_code=415,
-            detail={"message": "Only PDF files are accepted."},
-        )
+    # support both single 'file' and multi 'files' (gateway sends 'files' for pyq multi)
+    uploaded: list[UploadFile] = []
+    if files:
+        uploaded.extend(files)
+    if file:
+        uploaded.append(file)
+    if not uploaded:
+        raise HTTPException(status_code=400, detail={"message": "No file provided."})
+    if len(uploaded) > 10:
+        raise HTTPException(status_code=413, detail={"message": "Too many files. Maximum is 10."})
 
-    raw = await file.read()
-    if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail={"message": "File exceeds 15 MB limit."},
-        )
+    all_texts: list[str] = []
+    for f in uploaded:
+        if f.content_type != "application/pdf":
+            raise HTTPException(
+                status_code=415,
+                detail={"message": "Only PDF files are accepted."},
+            )
+        raw = await f.read()
+        if len(raw) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail={"message": "File exceeds 15 MB limit."},
+            )
+        try:
+            txt = extract_text_from_pdf_bytes(raw)
+        except EncryptedPDFError as e:
+            raise HTTPException(status_code=400, detail={"message": str(e)})
+        except InsufficientTextError as e:
+            raise HTTPException(status_code=422, detail={"message": str(e)})
+        except CorruptPDFError as e:
+            raise HTTPException(status_code=400, detail={"message": str(e)})
+        all_texts.append(txt)
 
-    try:
-        text = extract_text_from_pdf_bytes(raw)
-    except EncryptedPDFError as e:
-        raise HTTPException(status_code=400, detail={"message": str(e)})
-    except InsufficientTextError as e:
-        raise HTTPException(status_code=422, detail={"message": str(e)})
-    except CorruptPDFError as e:
-        raise HTTPException(status_code=400, detail={"message": str(e)})
-
-    classification = classify_document(text)
+    # classification on concatenated text for mode_mismatch
+    combined_text = "\n\n".join(all_texts)
+    classification = classify_document(combined_text)
     task_hint = TASK_MAP.get(mode.upper())
-    chunks = chunk_text(text, task=task_hint)
+    # chunk per file then flat (keeps per-doc context, still single job)
+    chunks: list[str] = []
+    for txt in all_texts:
+        chunks.extend(chunk_text(txt, task=task_hint))
     if not chunks:
         raise HTTPException(
             status_code=422,
@@ -142,11 +160,24 @@ async def reprocess_chunks(
 
     task = TASK_MAP[mode.upper()]
     job_id = str(uuid4())
+    # give reprocess jobs a synthetic classification so polling can reach `done` without waiting for `classification`
+    from app.classifiers.heuristic_engine import ClassificationResult
+
+    synth_class = ClassificationResult(
+        doc_type=mode.upper(),  # type: ignore
+        confidence=1.0,
+        metrics={
+            "SYLLABUS": {"count": 0, "matched_markers": []},
+            "PYQ": {"count": 0, "matched_markers": []},
+            "NOTES": {"count": 0, "matched_markers": []},
+        },
+    )
     request.app.state.store.create_job(
         job_id,
         task=task,
         doc_type=mode.upper(),
         chunks=chunks,
+        classification=synth_class.model_dump(),
         user_mode=mode,
         flashcard_count=flashcard_count,
     )
