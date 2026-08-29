@@ -23,8 +23,8 @@ function App() {
     }
   };
 
-  const handleGenerateNotes = (subtask: NotesTab) => {
-    generateMore('notes', flashcardCount, subtask);
+  const handleGenerateNotes = (subtask: NotesTab, count?: number) => {
+    generateMore('notes', count ?? flashcardCount, subtask);
   };
 
   useEffect(() => {
