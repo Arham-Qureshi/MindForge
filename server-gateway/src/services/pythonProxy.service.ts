@@ -37,13 +37,17 @@ function mapUpstreamError(err: unknown): never | undefined {
 }
 
 export async function forwardToPythonEngine(
-  fileBuffer: Buffer,
+  fileBuffer: Buffer | Buffer[],
   params?: ProcessParams,
 ): Promise<UpstreamResult> {
   const form = new FormData();
-  form.append("file", fileBuffer, {
-    filename: "document.pdf",
-    contentType: "application/pdf",
+  const buffers = Array.isArray(fileBuffer) ? fileBuffer : [fileBuffer];
+  const field = buffers.length > 1 ? "files" : "file";
+  buffers.forEach((buf, i) => {
+    form.append(field, buf, {
+      filename: `document${i > 0 ? `-${i}` : ""}.pdf`,
+      contentType: "application/pdf",
+    });
   });
 
   const qs = new URLSearchParams();
