@@ -56,6 +56,29 @@ class RateLimiter:
                 snap["day_tokens"] = max(0, snap["day_tokens"] + delta)
                 self.store.save_snapshot(provider, snap)
 
+    def headroom(self, provider: str) -> dict:
+        # live view for batch packing — no side effects
+        now = self._clock()
+        penalty_until = self.store.get_penalty(provider)
+        if penalty_until > now:
+            return {"rpm_rem": 0, "tpm_rem": 0, "reset_in": penalty_until - now, "penalized": True}
+        with self._lock:
+            snap = self.store.snapshot(provider)
+            win_start = int(now // MINUTE) * MINUTE
+            # if window rolled, counters are logically zero
+            if snap["win_start"] != win_start:
+                snap["reqs"] = 0
+                snap["tokens"] = 0
+            day_start = int(now // DAY) * DAY
+            if snap["day_start"] != day_start:
+                snap["day_reqs"] = 0
+                snap["day_tokens"] = 0
+            limits = PROVIDER_LIMITS[provider]
+            rpm_rem = max(0, limits["rpm"] - snap["reqs"])
+            tpm_rem = max(0, limits["tpm"] - snap["tokens"])
+            reset_in = (win_start + MINUTE) - now
+            return {"rpm_rem": rpm_rem, "tpm_rem": tpm_rem, "reset_in": reset_in, "penalized": False}
+
     def _try_acquire(self, provider: str, est_tokens: int) -> float | None:
         now = self._clock()
         penalty_until = self.store.get_penalty(provider)
