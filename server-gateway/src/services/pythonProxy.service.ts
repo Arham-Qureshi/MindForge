@@ -19,6 +19,7 @@ type UpstreamResult = { status: number; data: unknown };
 export type ProcessParams = {
   mode?: string;
   flashcardCount?: number;
+  notesSubtask?: string;
 };
 
 function mapUpstreamError(err: unknown): never | undefined {
@@ -45,16 +46,39 @@ export async function forwardToPythonEngine(
     contentType: "application/pdf",
   });
 
-  const parts: string[] = [];
-  if (params?.mode) parts.push(`mode=${params.mode}`);
-  if (params?.flashcardCount) parts.push(`flashcard_count=${params.flashcardCount}`);
-  const query = parts.length ? `?${parts.join("&")}` : "";
+  const qs = new URLSearchParams();
+  if (params?.mode) qs.set("mode", params.mode);
+  if (params?.flashcardCount) qs.set("flashcard_count", String(params.flashcardCount));
+  if (params?.notesSubtask) qs.set("notes_subtask", params.notesSubtask);
+  const query = qs.toString() ? `?${qs}` : "";
 
   try {
     const res = await axios.post(
       `${env.pythonEngineUrl}/api/v1/document/process${query}`,
       form,
       { timeout: PY_PROXY_TIMEOUT_MS, headers: form.getHeaders() },
+    );
+    return { status: res.status, data: res.data };
+  } catch (err) {
+    mapUpstreamError(err);
+    throw err;
+  }
+}
+
+export async function forwardReprocessToPythonEngine(
+  chunks: string[],
+  params?: ProcessParams,
+): Promise<UpstreamResult> {
+  const qs = new URLSearchParams();
+  if (params?.mode) qs.set("mode", params.mode);
+  if (params?.flashcardCount) qs.set("flashcard_count", String(params.flashcardCount));
+  if (params?.notesSubtask) qs.set("notes_subtask", params.notesSubtask);
+  const query = qs.toString() ? `?${qs}` : "";
+  try {
+    const res = await axios.post(
+      `${env.pythonEngineUrl}/api/v1/document/reprocess${query}`,
+      { chunks },
+      { timeout: PY_PROXY_TIMEOUT_MS, headers: { "Content-Type": "application/json" } },
     );
     return { status: res.status, data: res.data };
   } catch (err) {
