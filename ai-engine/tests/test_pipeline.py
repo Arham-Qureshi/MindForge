@@ -60,8 +60,8 @@ def test_complete_returns_llm_result_with_usage():
 def test_groq_uses_task_output_reserve():
     with patch("app.pipelines.llm_client.Groq") as MockGroq:
         MockGroq.return_value.chat.completions.create.return_value = make_groq_response()
-        LLMClient().complete(task="notes", user="u")
-    assert MockGroq.return_value.chat.completions.create.call_args[1]["max_tokens"] == 3000
+        LLMClient().complete(task="notes_flashcards", user="u")
+    assert MockGroq.return_value.chat.completions.create.call_args[1]["max_tokens"] == 2000
 
 
 def test_llm_client_guard_in_system_message():
@@ -129,7 +129,7 @@ def test_llm_client_routes_notes_to_groq():
     with patch("app.pipelines.llm_client.Groq") as MockGroq, \
          patch("app.pipelines.llm_client.genai") as mock_genai:
         MockGroq.return_value.chat.completions.create.return_value = make_groq_response()
-        LLMClient().complete(task="notes", user="test")
+        LLMClient().complete(task="notes_flashcards", user="test")
         MockGroq.return_value.chat.completions.create.assert_called_once()
         mock_genai.Client.return_value.models.generate_content.assert_not_called()
 
@@ -221,9 +221,16 @@ def test_groq_5xx_maps_to_retryable_error():
 
 
 def _raise_gemini(exc):
-    with patch("app.pipelines.llm_client.Groq"), \
+    import groq as groq_sdk
+    with patch("app.pipelines.llm_client.Groq") as mock_groq, \
          patch("app.pipelines.llm_client.genai") as mock_genai:
         mock_genai.Client.return_value.models.generate_content.side_effect = exc
+        # make groq also fail so fallback chain exhausts
+        mock_groq.return_value.chat.completions.create.side_effect = groq_sdk.RateLimitError(
+            message="fallback also limited",
+            response=MagicMock(status_code=429, headers={}),
+            body=None,
+        )
         LLMClient().complete(task="pyq", user="u")
 
 
