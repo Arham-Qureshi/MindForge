@@ -71,6 +71,10 @@ class Store:
                 conn.execute("ALTER TABLE jobs ADD COLUMN flashcard_count INTEGER NOT NULL DEFAULT 10")
             except sqlite3.OperationalError:
                 pass
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN notes_subtask TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, timeout=30)
@@ -188,6 +192,21 @@ class Store:
                 (job_id,),
             ).fetchall()
             return [json.loads(r["result"]) for r in rows if r["result"]]
+
+    def raw_chunks(self, job_id: str) -> list[str]:
+        with self._lock, self._conn() as conn:
+            rows = conn.execute(
+                "SELECT text FROM job_chunks WHERE job_id = ? ORDER BY idx",
+                (job_id,),
+            ).fetchall()
+            return [r["text"] for r in rows]
+
+    def set_notes_subtask(self, job_id: str, subtask: str):
+        with self._lock, self._conn() as conn:
+            conn.execute(
+                "UPDATE jobs SET notes_subtask = ? WHERE id = ?",
+                (subtask, job_id),
+            )
 
     # ---- rate limiter counters ----
 

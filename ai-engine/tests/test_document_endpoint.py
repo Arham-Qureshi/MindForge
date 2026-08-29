@@ -46,7 +46,7 @@ def test_process_returns_202_with_job_id(make_client):
     assert body["chunks_total"] == 2
     job = client.app.state.store.get_job(body["job_id"])
     assert job["doc_type"] == "NOTES"
-    assert job["task"] == "notes"
+    assert job["task"] == "notes_flashcards"
 
 
 def test_process_end_to_end_reaches_done_with_payload(make_client):

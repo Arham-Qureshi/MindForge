@@ -20,3 +20,23 @@ class NotesPayload(BaseModel):
     document_summary: str
     flashcards: list[Flashcard]
     practice_exam: list[QuizQuestion]
+
+
+# subtask payloads — each LLM call for notes_* returns ONLY that slice,
+# but we accept missing keys with defaults so prompt-contract partials validate
+class NotesFlashcardsPayload(BaseModel):
+    flashcards: list[Flashcard]
+    document_summary: str = ""
+    practice_exam: list[QuizQuestion] = []
+
+
+class NotesExamPayload(BaseModel):
+    practice_exam: list[QuizQuestion]
+    document_summary: str = ""
+    flashcards: list[Flashcard] = []
+
+
+class NotesSummaryPayload(BaseModel):
+    document_summary: str
+    flashcards: list[Flashcard] = []
+    practice_exam: list[QuizQuestion] = []

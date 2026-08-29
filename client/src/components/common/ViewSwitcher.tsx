@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import type { EngineResponse, SyllabusPayload, PYQAnalysisPayload, NotesPayload } from "../../types/api.types";
 import type { ExportPayload } from "../../types/export";
 import { exportStudyAssets } from "../../services/exportService";
@@ -5,14 +6,29 @@ import SyllabusView from "../../features/syllabus-view/SyllabusView";
 import PYQView from "../../features/pyq-view/PYQView";
 import NotesView from "../../features/notes-view/NotesView";
 
+type NotesTab = 'flashcards' | 'exam' | 'summary';
+
 type ViewSwitcherProps = {
   data: EngineResponse;
   onReset: () => void;
+  onGenerateNotes?: (subtask: NotesTab, count?: number) => void;
 };
 
-export default function ViewSwitcher({ data, onReset }: ViewSwitcherProps) {
+export default function ViewSwitcher({ data, onReset, onGenerateNotes }: ViewSwitcherProps) {
   const { classification, payload } = data;
   const docType = classification.doc_type;
+  const [notesTab, setNotesTab] = useState<NotesTab>('flashcards');
+
+  useEffect(() => {
+    if (docType === 'NOTES') {
+      const p = payload as NotesPayload;
+      if (p.flashcards.length > 0) setNotesTab('flashcards');
+      else if (p.practice_exam.length > 0) setNotesTab('exam');
+      else setNotesTab('summary');
+    }
+  }, [docType, payload]);
+
+  const hideExports = docType === 'NOTES' && notesTab === 'flashcards';
 
   return (
     <div className="w-full flex flex-col pt-4 pb-12">
@@ -34,26 +50,28 @@ export default function ViewSwitcher({ data, onReset }: ViewSwitcherProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => payload && exportStudyAssets(payload as ExportPayload, { format: 'pdf', docType: classification.doc_type })}
-              disabled={!payload}
-              className="hover-press flex items-center gap-1.5 rounded-full border-2 border-ink-black bg-paper-white px-3 py-1.5 font-haas-grot-text text-xs font-bold text-ink-black shadow-hard-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <span className="material-symbols-outlined text-[16px]">picture_as_pdf</span>
-              PDF
-            </button>
-            {(classification.doc_type === 'NOTES' || classification.doc_type === 'PYQ') && (
+          {!hideExports && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => payload && exportStudyAssets(payload as ExportPayload, { format: 'csv', docType: classification.doc_type })}
+                onClick={() => payload && exportStudyAssets(payload as ExportPayload, { format: 'pdf', docType: classification.doc_type })}
                 disabled={!payload}
                 className="hover-press flex items-center gap-1.5 rounded-full border-2 border-ink-black bg-paper-white px-3 py-1.5 font-haas-grot-text text-xs font-bold text-ink-black shadow-hard-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <span className="material-symbols-outlined text-[16px]">description</span>
-                CSV
+                <span className="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+                PDF
               </button>
-            )}
-          </div>
+              {(classification.doc_type === 'NOTES' || classification.doc_type === 'PYQ') && (
+                <button
+                  onClick={() => payload && exportStudyAssets(payload as ExportPayload, { format: 'csv', docType: classification.doc_type })}
+                  disabled={!payload}
+                  className="hover-press flex items-center gap-1.5 rounded-full border-2 border-ink-black bg-paper-white px-3 py-1.5 font-haas-grot-text text-xs font-bold text-ink-black shadow-hard-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined text-[16px]">description</span>
+                  CSV
+                </button>
+              )}
+            </div>
+          )}
           
           <button 
             onClick={onReset}
@@ -76,7 +94,7 @@ export default function ViewSwitcher({ data, onReset }: ViewSwitcherProps) {
         )}
         
         {docType === 'NOTES' && (
-          <NotesView payload={payload as NotesPayload} />
+          <NotesView payload={payload as NotesPayload} onGenerateMore={onGenerateNotes} activeTab={notesTab} onTabChange={setNotesTab} />
         )}
       </div>
     </div>

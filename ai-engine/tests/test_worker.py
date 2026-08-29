@@ -20,10 +20,10 @@ class FakeLLM:
         self.outcomes = list(outcomes)
         self.calls = []
 
-    def estimate_request_tokens(self, task, user):
+    def estimate_request_tokens(self, task, user, flashcard_count=10):
         return 100
 
-    def complete(self, task, user, model=None, json_mode=False):
+    def complete(self, task, user, model=None, json_mode=False, flashcard_count=10):
         self.calls.append(task)
         outcome = self.outcomes.pop(0) if len(self.outcomes) > 1 else self.outcomes[0]
         if isinstance(outcome, Exception):
@@ -64,7 +64,7 @@ def make_worker(tmp_path, llm, limiter=None, deadline_seconds=300):
 
 
 def create_job(store, doc_type="NOTES", chunks=("c1", "c2")):
-    task_map = {"SYLLABUS": "syllabus", "PYQ": "pyq", "NOTES": "notes"}
+    task_map = {"SYLLABUS": "syllabus", "PYQ": "pyq", "NOTES": "notes_flashcards"}
     store.create_job("job-1", task=task_map[doc_type], doc_type=doc_type, chunks=list(chunks))
     return "job-1"
 
@@ -183,7 +183,7 @@ def test_cancel_mid_processing_aborts_worker(tmp_path):
     worker.process_job_sync(job_id)
 
     assert store.get_job(job_id)["status"] == "cancelled"
-    assert len(llm.calls) <= 3
+    assert len(llm.calls) <= 4
 
 
 def test_cancelled_queued_job_never_starts(tmp_path):

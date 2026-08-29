@@ -109,8 +109,8 @@ def test_flashcard_count_stored(make_client):
         res = client.post(
             "/api/v1/document/process",
             files={"file": ("test.pdf", PDF_BYTES, "application/pdf")},
-            params={"mode": "notes", "flashcard_count": 25},
+            params={"mode": "notes", "flashcard_count": 15},
         )
     assert res.status_code == 202
     job = client.app.state.store.get_job(res.json()["job_id"])
-    assert job["flashcard_count"] == 25
+    assert job["flashcard_count"] == 15

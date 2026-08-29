@@ -87,6 +87,7 @@ export type JobStatus = {
   chunks_total: number;
   classification?: ClassificationResult;
   payload?: SyllabusPayload | PYQAnalysisPayload | NotesPayload;
+  raw_chunks?: string[];
   error?: string;
 };
 

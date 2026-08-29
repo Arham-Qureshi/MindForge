@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { documentService } from '../services/documentService';
-import type { EngineResponse, JobAccepted, ProcessingMode } from '../types/api.types';
+import type { EngineResponse, JobAccepted, JobStatus, ProcessingMode } from '../types/api.types';
 
 const STORAGE_KEY = 'mf.active_job';
 const POLL_MS = 2000;
-const MAX_CONSECUTIVE_ERRORS = 10; // ~20s of dead gateway before we give up
+const MAX_CONSECUTIVE_ERRORS = 10;
 
 export type SessionPhase =
   | { kind: 'idle' }
   | { kind: 'processing'; job: JobAccepted; chunksDone: number }
-  | { kind: 'ready'; data: EngineResponse; file?: File }
+  | { kind: 'ready'; data: EngineResponse; file?: File; rawChunks?: string[] }
   | { kind: 'failed'; message: string };
 
 function readSavedJob(): JobAccepted | null {
@@ -25,9 +25,42 @@ function readSavedJob(): JobAccepted | null {
   return null;
 }
 
+function handleStatusUpdate(
+  status: JobStatus,
+  activeJob: JobAccepted,
+  activeFileRef: React.MutableRefObject<File | null>,
+  activeChunksRef: React.MutableRefObject<string[]>,
+  setActiveJob: (job: JobAccepted | null) => void,
+  setPhase: (phase: SessionPhase) => void,
+) {
+  if (status.status === 'done' && status.payload && status.classification) {
+    const savedFile = activeFileRef.current;
+    const rawChunks = status.raw_chunks;
+    activeChunksRef.current = rawChunks ?? [];
+    window.localStorage.removeItem(STORAGE_KEY);
+    setActiveJob(null);
+    setPhase({
+      kind: 'ready',
+      data: {
+        classification: status.classification,
+        payload: status.payload,
+      },
+      file: savedFile ?? undefined,
+      rawChunks,
+    });
+  } else if (status.status === 'failed') {
+    window.localStorage.removeItem(STORAGE_KEY);
+    setActiveJob(null);
+    setPhase({ kind: 'failed', message: status.error || 'Processing failed.' });
+  } else if (status.chunks_done !== undefined) {
+    setPhase({ kind: 'processing', job: activeJob, chunksDone: status.chunks_done });
+  }
+}
+
 export function useJobSession() {
   const [activeJob, setActiveJob] = useState<JobAccepted | null>(readSavedJob);
   const activeFileRef = useRef<File | null>(null);
+  const activeChunksRef = useRef<string[]>([]);
   const [phase, setPhase] = useState<SessionPhase>(() => {
     const saved = readSavedJob();
     return saved ? { kind: 'processing', job: saved, chunksDone: 0 } : { kind: 'idle' };
@@ -42,30 +75,29 @@ export function useJobSession() {
 
   const reset = useCallback(() => {
     activeFileRef.current = null;
+    activeChunksRef.current = [];
     window.localStorage.removeItem(STORAGE_KEY);
     setActiveJob(null);
     setPhase({ kind: 'idle' });
   }, []);
 
-  const generateMore = useCallback(async (mode: ProcessingMode, flashcardCount?: number) => {
-    const file = activeFileRef.current;
-    if (!file) return;
+  const generateMore = useCallback(async (mode: ProcessingMode, flashcardCount?: number, notesSubtask?: string) => {
+    const chunks = activeChunksRef.current;
+    if (!chunks.length) return;
     try {
-      const job = await documentService.processDocument(file, mode, flashcardCount);
-      activeFileRef.current = file;
+      const job = await documentService.reprocessJob(chunks, mode, flashcardCount, notesSubtask);
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(job));
       setPhase({ kind: 'processing', job, chunksDone: 0 });
       setActiveJob(job);
     } catch {
-      // upload failed — keep current phase, caller can handle via upload error state
+      // reprocess failed
     }
   }, []);
 
-  // stop polling instantly, clear the session, then best-effort cancel server-side
-  // so the engine stops burning provider quota on an abandoned job
   const kill = useCallback(async () => {
     const job = activeJob;
     activeFileRef.current = null;
+    activeChunksRef.current = [];
     window.localStorage.removeItem(STORAGE_KEY);
     setActiveJob(null);
     setPhase({ kind: 'idle' });
@@ -73,61 +105,70 @@ export function useJobSession() {
       try {
         await documentService.cancelJob(job.job_id);
       } catch {
-        // engine unreachable or job already terminal; local session is cleared either way
+        // engine unreachable or job already terminal
       }
     }
   }, [activeJob]);
 
+  // SSE with polling fallback
   useEffect(() => {
     if (!activeJob) return;
 
     let cancelled = false;
+    let es: EventSource | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
     let consecutiveErrors = 0;
-    const tick = async () => {
-      try {
-        const status = await documentService.getJob(activeJob.job_id);
-        if (cancelled) return;
-        consecutiveErrors = 0;
 
-        if (status.status === 'done' && status.payload && status.classification) {
-          const savedFile = activeFileRef.current;
-          window.localStorage.removeItem(STORAGE_KEY);
-          setActiveJob(null);
-          setPhase({
-            kind: 'ready',
-            data: {
-              classification: status.classification,
-              payload: status.payload,
-            },
-            file: savedFile ?? undefined,
-          });
-        } else if (status.status === 'failed') {
-          window.localStorage.removeItem(STORAGE_KEY);
-          setActiveJob(null);
-          setPhase({ kind: 'failed', message: status.error || 'Processing failed.' });
-        } else if (status.chunks_done !== undefined) {
-          setPhase({ kind: 'processing', job: activeJob, chunksDone: status.chunks_done });
-        }
-      } catch {
-        // transient network/gateway errors: keep polling for a while, then surface
-        consecutiveErrors += 1;
-        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS && !cancelled) {
-          window.localStorage.removeItem(STORAGE_KEY);
-          setActiveJob(null);
-          setPhase({
-            kind: 'failed',
-            message:
-              'Lost connection while processing. The job may still finish server-side — try uploading again.',
-          });
-        }
+    const handleEvent = (status: JobStatus) => {
+      if (cancelled) return;
+      consecutiveErrors = 0;
+      handleStatusUpdate(status, activeJob, activeFileRef, activeChunksRef, setActiveJob, setPhase);
+    };
+
+    const handlePollError = () => {
+      consecutiveErrors += 1;
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS && !cancelled) {
+        window.localStorage.removeItem(STORAGE_KEY);
+        setActiveJob(null);
+        setPhase({
+          kind: 'failed',
+          message: 'Lost connection while processing. The job may still finish server-side — try uploading again.',
+        });
       }
     };
 
-    tick();
-    const interval = setInterval(tick, POLL_MS);
+    const startPolling = () => {
+      if (pollInterval) return;
+      const tick = async () => {
+        try {
+          const status = await documentService.getJob(activeJob.job_id);
+          handleEvent(status);
+        } catch {
+          handlePollError();
+        }
+      };
+      tick();
+      pollInterval = setInterval(tick, POLL_MS);
+    };
+
+    // try SSE first
+    try {
+      es = documentService.connectSSE(
+        activeJob.job_id,
+        handleEvent,
+        () => {
+          // SSE failed, fall back to polling
+          if (!cancelled) startPolling();
+        },
+      );
+    } catch {
+      startPolling();
+    }
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      es?.close();
+      if (pollInterval) clearInterval(pollInterval);
     };
   }, [activeJob]);
 

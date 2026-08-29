@@ -4,11 +4,13 @@ import { useKeyboardNav } from '../../../hooks/useKeyboardNav';
 
 type FlashcardDeckProps = {
   flashcards: Flashcard[];
+  onGenerateMore?: (count: number) => void;
 };
 
-export default function FlashcardDeck({ flashcards }: FlashcardDeckProps) {
+export default function FlashcardDeck({ flashcards, onGenerateMore }: FlashcardDeckProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [selectedCount, setSelectedCount] = useState(10);
 
   const handleNext = useCallback(() => {
     if (currentIndex < flashcards.length - 1) {
@@ -119,6 +121,35 @@ export default function FlashcardDeck({ flashcards }: FlashcardDeckProps) {
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </button>
       </div>
+      {onGenerateMore && (
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-haas-grot-text text-sm font-bold text-ink-black">Generate more:</span>
+            {[5, 10, 15].map((count) => (
+              <button
+                key={count}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedCount(count);
+                }}
+                className={`rounded-full border-2 border-ink-black px-3 py-1 font-martian-mono text-sm font-bold transition-colors ${
+                  selectedCount === count
+                    ? 'bg-electric-iris text-paper-white'
+                    : 'bg-paper-white text-ink-black hover:bg-frost-blue'
+                }`}
+              >
+                {count}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onGenerateMore(selectedCount); }}
+            className="hover-press rounded-full border-2 border-ink-black bg-electric-iris px-6 py-2 font-haas-grot-text text-sm font-bold text-paper-white shadow-hard-sm"
+          >
+            Generate More Flashcards
+          </button>
+        </div>
+      )}
     </div>
   );
 }

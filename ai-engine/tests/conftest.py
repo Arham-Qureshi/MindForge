@@ -28,10 +28,10 @@ class FakeLLM:
     def __init__(self, outcomes):
         self.outcomes = list(outcomes)
 
-    def estimate_request_tokens(self, task, user):
+    def estimate_request_tokens(self, task, user, flashcard_count=10):
         return 100
 
-    def complete(self, task, user, model=None, json_mode=False):
+    def complete(self, task, user, model=None, json_mode=False, flashcard_count=10):
         outcome = self.outcomes.pop(0) if len(self.outcomes) > 1 else self.outcomes[0]
         if isinstance(outcome, Exception):
             raise outcome

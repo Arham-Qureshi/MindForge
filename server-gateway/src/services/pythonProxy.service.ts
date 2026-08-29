@@ -16,6 +16,12 @@ export class PythonEngineError extends Error {
 
 type UpstreamResult = { status: number; data: unknown };
 
+export type ProcessParams = {
+  mode?: string;
+  flashcardCount?: number;
+  notesSubtask?: string;
+};
+
 function mapUpstreamError(err: unknown): never | undefined {
   if (axios.isAxiosError(err) && (err.code === "ECONNREFUSED" || err.code === "ECONNABORTED")) {
     throw new PythonEngineDownError("python engine unreachable");
@@ -30,18 +36,50 @@ function mapUpstreamError(err: unknown): never | undefined {
   return undefined;
 }
 
-export async function forwardToPythonEngine(fileBuffer: Buffer): Promise<UpstreamResult> {
+export async function forwardToPythonEngine(
+  fileBuffer: Buffer,
+  params?: ProcessParams,
+): Promise<UpstreamResult> {
   const form = new FormData();
   form.append("file", fileBuffer, {
     filename: "document.pdf",
     contentType: "application/pdf",
   });
 
+  const qs = new URLSearchParams();
+  if (params?.mode) qs.set("mode", params.mode);
+  if (params?.flashcardCount) qs.set("flashcard_count", String(params.flashcardCount));
+  if (params?.notesSubtask) qs.set("notes_subtask", params.notesSubtask);
+  const query = qs.toString() ? `?${qs}` : "";
+
   try {
-    const res = await axios.post(`${env.pythonEngineUrl}/api/v1/document/process`, form, {
-      timeout: PY_PROXY_TIMEOUT_MS,
-      headers: form.getHeaders(),
-    });
+    const res = await axios.post(
+      `${env.pythonEngineUrl}/api/v1/document/process${query}`,
+      form,
+      { timeout: PY_PROXY_TIMEOUT_MS, headers: form.getHeaders() },
+    );
+    return { status: res.status, data: res.data };
+  } catch (err) {
+    mapUpstreamError(err);
+    throw err;
+  }
+}
+
+export async function forwardReprocessToPythonEngine(
+  chunks: string[],
+  params?: ProcessParams,
+): Promise<UpstreamResult> {
+  const qs = new URLSearchParams();
+  if (params?.mode) qs.set("mode", params.mode);
+  if (params?.flashcardCount) qs.set("flashcard_count", String(params.flashcardCount));
+  if (params?.notesSubtask) qs.set("notes_subtask", params.notesSubtask);
+  const query = qs.toString() ? `?${qs}` : "";
+  try {
+    const res = await axios.post(
+      `${env.pythonEngineUrl}/api/v1/document/reprocess${query}`,
+      { chunks },
+      { timeout: PY_PROXY_TIMEOUT_MS, headers: { "Content-Type": "application/json" } },
+    );
     return { status: res.status, data: res.data };
   } catch (err) {
     mapUpstreamError(err);

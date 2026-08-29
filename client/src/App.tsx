@@ -8,17 +8,23 @@ import ViewSwitcher from "./components/common/ViewSwitcher";
 import { useJobSession } from "./hooks/useJobSession";
 import type { JobAccepted, ProcessingMode } from "./types/api.types";
 
+type NotesTab = 'flashcards' | 'exam' | 'summary';
+
 function App() {
   const { phase, startJob, reset, kill, generateMore } = useJobSession();
   const [mode, setMode] = useState<ProcessingMode>("notes");
   const [flashcardCount, setFlashcardCount] = useState(10);
   const [showMismatchToast, setShowMismatchToast] = useState(false);
 
-  const handleAccepted = (job: JobAccepted) => {
-    startJob(job);
+  const handleAccepted = (job: JobAccepted, file: File) => {
+    startJob(job, file);
     if (job.mode_mismatch) {
       setShowMismatchToast(true);
     }
+  };
+
+  const handleGenerateNotes = (subtask: NotesTab, count?: number) => {
+    generateMore('notes', count ?? flashcardCount, subtask);
   };
 
   useEffect(() => {
@@ -61,7 +67,7 @@ function App() {
                   return (
                     <button
                       key={m}
-                      onClick={() => !isActive && generateMore(m)}
+                      onClick={() => !isActive && generateMore(m, m === 'notes' ? flashcardCount : undefined)}
                       disabled={isActive}
                       className={`rounded-full border-2 px-4 py-1.5 text-xs font-bold transition-all ${
                         isActive
@@ -75,7 +81,7 @@ function App() {
                 })}
               </div>
             </div>
-            <ViewSwitcher data={phase.data} onReset={reset} />
+            <ViewSwitcher data={phase.data} onReset={reset} onGenerateNotes={handleGenerateNotes} />
           </>
         )}
 
