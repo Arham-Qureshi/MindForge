@@ -10,7 +10,7 @@ const MODE_CONTENT: Record<ProcessingMode, { title: string; description: string;
   },
   pyq: {
     title: 'Past Year Question Analyzer',
-    description: 'Upload past exam papers to analyze question patterns and predict likely questions.',
+    description: 'Upload one or many past exam papers (1-10 PDFs) to analyze topic patterns and generate a predicted paper.',
     button: 'Analyze Past Papers',
   },
   syllabus: {
@@ -29,9 +29,10 @@ type DropzoneProps = {
 };
 
 export default function Dropzone({ onAccepted, onReset, mode, flashcardCount, onFlashcardCountChange }: DropzoneProps) {
-  const { status, error, upload, reset } = useFileUpload({ onAccepted, mode, flashcardCount });
+  const { status, error, upload, uploadMultiple, reset } = useFileUpload({ onAccepted, mode, flashcardCount });
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMulti = mode === 'pyq';
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -48,13 +49,17 @@ export default function Dropzone({ onAccepted, onReset, mode, flashcardCount, on
     setIsDragOver(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      upload(e.dataTransfer.files[0]);
+      const files = Array.from(e.dataTransfer.files);
+      if (isMulti && files.length > 1) uploadMultiple(files);
+      else upload(files[0]);
     }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      upload(e.target.files[0]);
+      const files = Array.from(e.target.files);
+      if (isMulti && files.length > 1) uploadMultiple(files);
+      else upload(files[0]);
     }
   };
 
@@ -89,6 +94,7 @@ export default function Dropzone({ onAccepted, onReset, mode, flashcardCount, on
           ref={fileInputRef}
           className="hidden"
           accept="application/pdf"
+          multiple={isMulti}
           onChange={handleFileInputChange}
           disabled={isUploading}
         />
