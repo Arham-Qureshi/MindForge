@@ -11,5 +11,8 @@ class Settings(BaseSettings):
     PYTHON_ENGINE_PORT: int = 8000
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 
+    FLASHCARD_MIN: int = 5
+    FLASHCARD_MAX: int = 15
+
 
 settings = Settings()
