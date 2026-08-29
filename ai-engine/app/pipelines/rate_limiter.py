@@ -6,7 +6,7 @@ DAY = 86400.0
 
 PROVIDER_LIMITS = {
     "groq": {"rpm": 30, "tpm": 8000, "rpd": 1000, "tpd": 200000},
-    "gemini": {"rpm": 10, "tpm": 250000, "rpd": 250, "tpd": None},
+    "gemini": {"rpm": 15, "tpm": 250000, "rpd": 1000, "tpd": None},
 }
 
 

@@ -13,6 +13,7 @@ from app.pipelines.tokens import count_tokens
 
 PROVIDER_ROUTES = {
     "pyq": "gemini",
+    "pyq_paper": "gemini",
     "notes_flashcards": "groq",
     "notes_exam": "groq",
     "notes_summary": "groq",
@@ -33,6 +34,7 @@ MAX_OUTPUT_TOKENS = {
     "notes_exam": 3000,
     "notes_summary": 2000,
     "pyq": 3000,
+    "pyq_paper": 2500,
 }
 DEFAULT_OUTPUT_RESERVE = 2000
 
@@ -118,8 +120,8 @@ class LLMClient:
         try:
             return self._call_provider(primary, full_system, user, model, json_mode, reserve)
         except LLMError as e:
-            if e.retryable and e.status == 429:
-                # try fallback providers
+            if e.retryable:
+                # try fallback providers for any retryable (429, 404 model not found, 5xx)
                 for fallback in PROVIDER_FALLBACK.get(primary, []):
                     try:
                         return self._call_provider(fallback, full_system, user, model, json_mode, reserve)
@@ -181,6 +183,9 @@ class LLMClient:
         except genai_errors.ClientError as e:
             if e.code == 429:
                 raise LLMError(429, str(e), "gemini", retryable=True, retry_after=30.0)
+            if e.code == 404:
+                # model not found / deprecated — fallback to groq is better than failing job
+                raise LLMError(e.code, str(e), "gemini", retryable=True, retry_after=1.0)
             raise LLMError(e.code, str(e), "gemini", retryable=False)
         except genai_errors.ServerError as e:
             raise LLMError(e.code, str(e), "gemini", retryable=True, retry_after=10.0)

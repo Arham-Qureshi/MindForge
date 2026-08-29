@@ -8,7 +8,7 @@ from app.jobs.store import Store
 from app.pipelines.llm_client import llm_client as _default_llm, LLMError, PROVIDER_ROUTES, MAX_OUTPUT_TOKENS, DEFAULT_OUTPUT_RESERVE
 from app.pipelines.rate_limiter import RateLimiter, DailyQuotaExhausted
 from app.pipelines.syllabus_pipeline import merge_syllabus_results
-from app.pipelines.pyq_pipeline import merge_pyq_results
+from app.pipelines.pyq_pipeline import merge_pyq_results, build_blueprint, build_exam_paper
 from app.pipelines.notes_pipeline import merge_notes_results, distribute_flashcards
 from app.schemas.syllabus_schema import SyllabusPayload
 from app.schemas.pyq_schema import PYQAnalysisPayload
@@ -218,6 +218,21 @@ class Worker:
             payload = MERGE_FNS[task](results, flashcard_count=flashcard_count)
         else:
             payload = MERGE_FNS[task](results)
+        # attach blueprint + exam paper for pyq (industry standard) — additive, log on error
+        if task == "pyq":
+            try:
+                tf = [t.model_dump() if hasattr(t, "model_dump") else t for t in payload.topic_frequency]
+                pq = [q.model_dump() if hasattr(q, "model_dump") else q for q in payload.predicted_questions]
+                bp = build_blueprint(tf, total_marks=80)
+                paper = build_exam_paper(tf, pq, blueprint=bp)
+                payload.blueprint = bp  # type: ignore
+                payload.exam_paper = paper  # type: ignore
+            except Exception as e:
+                # never fail job for blueprint, but log so blank-tab is debuggable
+                print(f"[worker] blueprint/paper build failed for {job_id}: {e}")
+                import traceback
+
+                traceback.print_exc()
         self.store.set_job_payload(job_id, payload.model_dump_json())
 
     def _process_chunk(self, job_id: str, task: str, chunk: dict, job: dict | None = None,

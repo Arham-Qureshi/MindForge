@@ -37,7 +37,7 @@ def seed_snapshot(store, provider, clock, **fields):
 
 def test_limits_match_free_tier():
     assert PROVIDER_LIMITS["groq"] == {"rpm": 30, "tpm": 8000, "rpd": 1000, "tpd": 200000}
-    assert PROVIDER_LIMITS["gemini"]["rpm"] == 10
+    assert PROVIDER_LIMITS["gemini"]["rpm"] == 15
 
 
 def test_acquire_ok_first_call(env):

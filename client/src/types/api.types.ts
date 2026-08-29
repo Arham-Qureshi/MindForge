@@ -31,9 +31,47 @@ export type PredictedQuestion = {
   probability_score: number;
 };
 
+export type BlueprintRow = {
+  topic: string;
+  percentage: number;
+  question_count: number;
+  marks: number;
+  bloom_breakdown: Record<string, number>;
+};
+
+export type BlueprintPayload = {
+  total_marks: number;
+  rows: BlueprintRow[];
+};
+
+export type ExamPaperQuestion = {
+  q_no: number;
+  question: string;
+  topic: string;
+  bloom_level: 'Apply' | 'Analyze' | 'Evaluate';
+  expected_marks: number;
+  probability_score: number;
+};
+
+export type ExamPaperSection = {
+  name: string;
+  instructions: string;
+  questions: ExamPaperQuestion[];
+};
+
+export type ExamPaper = {
+  title: string;
+  time: string;
+  max_marks: number;
+  instructions: string;
+  sections: ExamPaperSection[];
+};
+
 export type PYQAnalysisPayload = {
   topic_frequency: TopicFrequency[];
   predicted_questions: PredictedQuestion[];
+  blueprint?: BlueprintPayload;
+  exam_paper?: ExamPaper;
 };
 
 export type Flashcard = {

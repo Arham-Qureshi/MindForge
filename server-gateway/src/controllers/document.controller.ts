@@ -7,20 +7,33 @@ import {
 } from "../services/pythonProxy.service.js";
 import { ERR } from "../config/constants.js";
 
+function getFileBuffers(req: Request): Buffer[] {
+  const single = (req as unknown as { file?: Express.Multer.File }).file;
+  if (single?.buffer) return [single.buffer];
+  const multi = (req as unknown as { files?: Record<string, Express.Multer.File[]> }).files;
+  if (multi) {
+    if (Array.isArray(multi)) return (multi as unknown as Express.Multer.File[]).map((f) => f.buffer);
+    const a = (multi["file"] ?? []) as Express.Multer.File[];
+    const b = (multi["files"] ?? []) as Express.Multer.File[];
+    return [...a, ...b].map((f) => f.buffer);
+  }
+  return [];
+}
+
 export async function processDocument(req: Request, res: Response) {
   try {
-    const fileBuffer = req.file?.buffer;
-    if (!fileBuffer) {
+    const buffers = getFileBuffers(req);
+    if (buffers.length === 0) {
       return res.status(400).json({ error: ERR.NO_FILE, message: "No file provided." });
     }
-
     const mode = req.query.mode as string | undefined;
     const flashcardCount = req.query.flashcard_count
       ? Number(req.query.flashcard_count)
       : undefined;
     const notesSubtask = req.query.notes_subtask as string | undefined;
 
-    const { status, data } = await forwardToPythonEngine(fileBuffer, {
+    const payload = buffers.length === 1 ? buffers[0] : buffers;
+    const { status, data } = await forwardToPythonEngine(payload as Buffer & Buffer[], {
       mode,
       flashcardCount,
       notesSubtask,
@@ -36,7 +49,8 @@ export async function processDocument(req: Request, res: Response) {
     console.error(err);
     return res.status(500).json({ error: "ERR_500_INTERNAL", message: "Internal Gateway Error" });
   } finally {
-    req.file = undefined;
+    (req as unknown as { file?: unknown }).file = undefined;
+    (req as unknown as { files?: unknown }).files = undefined;
   }
 }
 

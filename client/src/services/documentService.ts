@@ -50,6 +50,23 @@ export const documentService = {
     return response.json();
   },
 
+  async processMultipleDocs(files: File[], mode: ProcessingMode): Promise<JobAccepted> {
+    const params = new URLSearchParams({ mode });
+    const formData = new FormData();
+    for (const f of files) formData.append("files", f);
+
+    const response = await fetch(`${API_URL}/api/document/process?${params}`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw await errorFrom(response);
+    }
+
+    return response.json();
+  },
+
   async reprocessJob(
     chunks: string[],
     mode: ProcessingMode,
