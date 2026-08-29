@@ -72,19 +72,52 @@ OUTPUT RULES:
 - Do not use any other top-level keys
 - Do not include markdown or explanatory text outside the JSON""",
 
-    "notes": """You are a lecture notes analysis engine for MindForge AI.
+    "notes_flashcards": """You are a flashcard generation engine for MindForge AI.
 
 {task_description}
 
 {injection_guard}
 
-Use exactly these top-level keys — do NOT invent others like "quiz_questions" or "summary":
-{{"document_summary": str, "flashcards": [{{"front": str, "back": str, "bloom_category": "Remember|Understand|Apply|Analyze|Evaluate|Create", "difficulty": "Easy|Medium|Hard"}}], "practice_exam": [{{"question": str, "options": [str, str, str, str], "correct_answer_index": int 0-3, "solution": str}}]}}
+Use exactly this JSON structure:
+{{"flashcards": [{{"front": str, "back": str, "bloom_category": "Remember|Understand|Apply|Analyze|Evaluate|Create", "difficulty": "Easy|Medium|Hard"}}]}}
 
 OUTPUT RULES:
 - Respond ONLY with valid JSON matching the structure above
-- Flashcards must have front, back, bloom_category (all 6 Bloom's levels), and difficulty (Easy/Medium/Hard)
-- Quiz questions live under "practice_exam" and must have exactly 4 options, correct_answer_index (0-3), and a detailed solution
+- Generate EXACTLY {flashcard_count} flashcards — no more, no fewer
+- Each flashcard must have front, back, bloom_category (all 6 Bloom's levels), and difficulty (Easy/Medium/Hard)
+- Cover diverse topics from the document
+- Do not include markdown or explanatory text outside the JSON""",
+
+    "notes_exam": """You are a practice exam generation engine for MindForge AI.
+
+{task_description}
+
+{injection_guard}
+
+Use exactly this JSON structure:
+{{"practice_exam": [{{"question": str, "options": [str, str, str, str], "correct_answer_index": int 0-3, "solution": str}}]}}
+
+OUTPUT RULES:
+- Respond ONLY with valid JSON matching the structure above
+- Each question must have exactly 4 options, correct_answer_index (0-3), and a detailed solution
+- Questions should test understanding, application, and analysis — not just recall
+- Cover key topics from the document
+- Do not include markdown or explanatory text outside the JSON""",
+
+    "notes_summary": """You are a document summary engine for MindForge AI.
+
+{task_description}
+
+{injection_guard}
+
+Use exactly this JSON structure:
+{{"document_summary": str}}
+
+OUTPUT RULES:
+- Respond ONLY with valid JSON matching the structure above
+- Summary should be concise but comprehensive (3-5 paragraphs)
+- Cover the main topics, key concepts, and important details
+- Use clear, academic language
 - Do not include markdown or explanatory text outside the JSON""",
 }
 
@@ -96,8 +129,13 @@ and priority_topics with percentage weightages.""",
     "pyq": """Analyze this Previous Year Question (PYQ) text chunk.
 Group questions by topic, calculate how often each topic appears (percentage of total questions),
 and generate predicted HOT exam questions for Apply, Analyze, and Evaluate levels.""",
-    "notes": """Analyze this lecture notes chunk.
-Generate flashcard term/definition pairs across Bloom's taxonomy levels with difficulty assessments.
+    "notes_flashcards": """Analyze this lecture notes chunk.
+Generate EXACTLY {flashcard_count} flashcard term/definition pairs across Bloom's taxonomy levels with difficulty assessments.
+Focus on key concepts, definitions, and important terms.""",
+    "notes_exam": """Analyze this lecture notes chunk.
 Create multiple-choice practice exam questions with 4 options and detailed solution explanations.
-Produce a concise summary of the document content.""",
+Focus on testing understanding, application, and analysis of the material.""",
+    "notes_summary": """Analyze this lecture notes chunk.
+Produce a concise but comprehensive summary of the document content.
+Cover the main topics, key concepts, and important details.""",
 }
