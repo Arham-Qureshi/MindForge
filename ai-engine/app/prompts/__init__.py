@@ -72,6 +72,22 @@ OUTPUT RULES:
 - Do not use any other top-level keys
 - Do not include markdown or explanatory text outside the JSON""",
 
+    "pyq_paper": """You are a blueprint and exam paper designer for MindForge AI.
+
+{task_description}
+
+{injection_guard}
+
+Use exactly these top-level keys:
+{{"blueprint": {{"total_marks": int, "rows": [{{"topic": str, "percentage": float, "question_count": int, "marks": int, "bloom_breakdown": {{"Apply": int, "Analyze": int, "Evaluate": int}}}}]}}, "exam_paper": {{"title": str, "time": str, "max_marks": int, "instructions": str, "sections": [{{"name": str, "instructions": str, "questions": [{{"q_no": int, "question": str, "topic": str, "bloom_level": "Apply|Analyze|Evaluate", "expected_marks": int, "probability_score": float}}]}}]}}}}
+
+OUTPUT RULES:
+- Respond ONLY with valid JSON matching the structure above
+- Blueprint marks must sum to total_marks (80) and percentages sum to 1.0
+- Exam paper must have 2 sections, 5 questions each (10 total), Attempt any 5 of 8 style — Q1-2 compulsory
+- Each question must have bloom_level Apply/Analyze/Evaluate and probability 0-1
+- Do not include markdown or explanatory text outside the JSON""",
+
     "notes_flashcards": """You are a flashcard generation engine for MindForge AI.
 
 {task_description}
@@ -129,6 +145,7 @@ and priority_topics with percentage weightages.""",
     "pyq": """Analyze this Previous Year Question (PYQ) text chunk.
 Group questions by topic, calculate how often each topic appears (percentage of total questions),
 and generate predicted HOT exam questions for Apply, Analyze, and Evaluate levels.""",
+    "pyq_paper": """Given merged topic frequency and predicted HOT questions, build a blueprint where marks = round(percentage*80) with Bloom mix 40% Apply / 35% Analyze / 25% Evaluate, and design an SPPU exam paper (Title, Time 3 Hours, Max Marks 80, Instructions Attempt any 5 of 8, 2 sections 5 Qs each).""",
     "notes_flashcards": """Analyze this lecture notes chunk.
 Generate EXACTLY {flashcard_count} flashcard term/definition pairs across Bloom's taxonomy levels with difficulty assessments.
 Focus on key concepts, definitions, and important terms.""",
