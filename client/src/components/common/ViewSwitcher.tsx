@@ -5,6 +5,7 @@ import { exportStudyAssets } from "../../services/exportService";
 import SyllabusView from "../../features/syllabus-view/SyllabusView";
 import PYQView from "../../features/pyq-view/PYQView";
 import NotesView from "../../features/notes-view/NotesView";
+import ErrorBoundary from "./ErrorBoundary";
 
 type NotesTab = 'flashcards' | 'exam' | 'summary';
 
@@ -14,21 +15,30 @@ type ViewSwitcherProps = {
   onGenerateNotes?: (subtask: NotesTab, count?: number) => void;
 };
 
+function getPayloadType(payload: EngineResponse["payload"]): 'syllabus' | 'pyq' | 'notes' | 'unknown' {
+  const p = payload as Record<string, unknown>;
+  if (Array.isArray(p.topic_frequency)) return 'pyq';
+  if (Array.isArray(p.learning_path)) return 'syllabus';
+  if (Array.isArray(p.flashcards) || typeof p.document_summary === 'string') return 'notes';
+  return 'unknown';
+}
+
 export default function ViewSwitcher({ data, onReset, onGenerateNotes }: ViewSwitcherProps) {
   const { classification, payload } = data;
   const docType = classification.doc_type;
+  const payloadType = getPayloadType(payload);
   const [notesTab, setNotesTab] = useState<NotesTab>('flashcards');
 
   useEffect(() => {
-    if (docType === 'NOTES') {
+    if (payloadType === 'notes') {
       const p = payload as NotesPayload;
       if (p.flashcards.length > 0) setNotesTab('flashcards');
       else if (p.practice_exam.length > 0) setNotesTab('exam');
       else setNotesTab('summary');
     }
-  }, [docType, payload]);
+  }, [payloadType, payload]);
 
-  const hideExports = docType === 'NOTES' && notesTab === 'flashcards';
+  const hideExports = payloadType === 'notes' && notesTab === 'flashcards';
 
   return (
     <div className="w-full flex flex-col pt-4 pb-12">
@@ -83,19 +93,20 @@ export default function ViewSwitcher({ data, onReset, onGenerateNotes }: ViewSwi
         </div>
       </div>
 
-      {/* Main Content Area Routing */}
+      {/* Main Content Area Routing — payload shape wins over classification (avoids blank on misclassify) */}
       <div className="w-full animate-in fade-in duration-500">
-        {docType === 'SYLLABUS' && (
-          <SyllabusView payload={payload as SyllabusPayload} />
-        )}
-        
-        {docType === 'PYQ' && (
-          <PYQView payload={payload as PYQAnalysisPayload} />
-        )}
-        
-        {docType === 'NOTES' && (
-          <NotesView payload={payload as NotesPayload} onGenerateMore={onGenerateNotes} activeTab={notesTab} onTabChange={setNotesTab} />
-        )}
+        <ErrorBoundary>
+          {payloadType === 'syllabus' && <SyllabusView payload={payload as SyllabusPayload} />}
+          {payloadType === 'pyq' && <PYQView payload={payload as PYQAnalysisPayload} />}
+          {payloadType === 'notes' && <NotesView payload={payload as NotesPayload} onGenerateMore={onGenerateNotes} activeTab={notesTab} onTabChange={setNotesTab} />}
+          {payloadType === 'unknown' && (
+            <>
+              {docType === 'SYLLABUS' && <SyllabusView payload={payload as SyllabusPayload} />}
+              {docType === 'PYQ' && <PYQView payload={payload as PYQAnalysisPayload} />}
+              {docType === 'NOTES' && <NotesView payload={payload as NotesPayload} onGenerateMore={onGenerateNotes} activeTab={notesTab} onTabChange={setNotesTab} />}
+            </>
+          )}
+        </ErrorBoundary>
       </div>
     </div>
   );
