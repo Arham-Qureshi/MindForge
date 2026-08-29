@@ -33,16 +33,21 @@ function handleStatusUpdate(
   setActiveJob: (job: JobAccepted | null) => void,
   setPhase: (phase: SessionPhase) => void,
 ) {
-  if (status.status === 'done' && status.payload && status.classification) {
+  if (status.status === 'done' && status.payload) {
     const savedFile = activeFileRef.current;
     const rawChunks = status.raw_chunks;
     activeChunksRef.current = rawChunks ?? [];
     window.localStorage.removeItem(STORAGE_KEY);
     setActiveJob(null);
+    const classification = status.classification ?? {
+      doc_type: (status.doc_type as unknown as string) ?? activeJob.doc_type ?? 'NOTES',
+      confidence: 1.0,
+      metrics: {},
+    } as unknown as typeof status.classification;
     setPhase({
       kind: 'ready',
       data: {
-        classification: status.classification,
+        classification: classification as NonNullable<typeof status.classification>,
         payload: status.payload,
       },
       file: savedFile ?? undefined,
