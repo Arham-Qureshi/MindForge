@@ -4,9 +4,10 @@ import { useKeyboardNav } from '../../../hooks/useKeyboardNav';
 
 type FlashcardDeckProps = {
   flashcards: Flashcard[];
+  onGenerateMore?: () => void;
 };
 
-export default function FlashcardDeck({ flashcards }: FlashcardDeckProps) {
+export default function FlashcardDeck({ flashcards, onGenerateMore }: FlashcardDeckProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
 
@@ -119,6 +120,16 @@ export default function FlashcardDeck({ flashcards }: FlashcardDeckProps) {
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </button>
       </div>
+      {onGenerateMore && (
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={(e) => { e.stopPropagation(); onGenerateMore(); }}
+            className="hover-press rounded-full border-2 border-ink-black bg-electric-iris px-6 py-2 font-haas-grot-text text-sm font-bold text-paper-white shadow-hard-sm"
+          >
+            Generate More Flashcards
+          </button>
+        </div>
+      )}
     </div>
   );
 }
