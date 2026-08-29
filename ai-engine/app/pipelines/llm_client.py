@@ -13,15 +13,36 @@ from app.pipelines.tokens import count_tokens
 
 PROVIDER_ROUTES = {
     "pyq": "gemini",
+    "notes_flashcards": "groq",
+    "notes_exam": "groq",
+    "notes_summary": "groq",
+}
+
+# fallback chain: if primary provider fails with 429/rate-limit, try next
+PROVIDER_FALLBACK = {
+    "groq": ["cerebras", "gemini"],
+    "gemini": ["groq", "cerebras"],
+    "cerebras": ["groq", "gemini"],
 }
 
 # output reserves sized so input + reserve stays under Groq free-tier 8K TPM
+# flashcards reserve is scaled per-chunk (500+350*count) to allow 3 concurrent within 8000 (2→3)
 MAX_OUTPUT_TOKENS = {
     "syllabus": 2500,
-    "notes": 3000,
+    "notes_flashcards": 2000,
+    "notes_exam": 3000,
+    "notes_summary": 2000,
     "pyq": 3000,
 }
 DEFAULT_OUTPUT_RESERVE = 2000
+
+
+def _reserve_for(task: str, flashcard_count: int) -> int:
+    if task == "notes_flashcards":
+        # 1 card ~300 tok JSON, 2 cards ~600, base overhead 500 → fits 3/min target
+        scaled = 500 + 350 * max(1, flashcard_count)
+        return min(MAX_OUTPUT_TOKENS["notes_flashcards"], max(600, scaled))
+    return MAX_OUTPUT_TOKENS.get(task, DEFAULT_OUTPUT_RESERVE)
 
 
 @dataclass
@@ -72,28 +93,45 @@ class LLMClient:
         self._groq = Groq(api_key=settings.GROQ_API_KEY)
         self._gemini = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    def estimate_request_tokens(self, task: str, user: str) -> int:
+    def estimate_request_tokens(self, task: str, user: str, flashcard_count: int = 10) -> int:
         system = SYSTEM_PROMPTS[task].format(
-            task_description=TASK_DESCRIPTIONS.get(task, ""),
+            task_description=TASK_DESCRIPTIONS.get(task, "").format(flashcard_count=flashcard_count),
             injection_guard=INJECTION_GUARD,
+            flashcard_count=flashcard_count,
         )
-        reserve = MAX_OUTPUT_TOKENS.get(task, DEFAULT_OUTPUT_RESERVE)
+        reserve = _reserve_for(task, flashcard_count)
         return count_tokens(system) + count_tokens(f"<user_document_content>\n{user}\n</user_document_content>") + reserve + 50
 
-    def complete(self, task: str, user: str, model: str = None, json_mode: bool = False) -> LLMResult:
+    def complete(self, task: str, user: str, model: str = None, json_mode: bool = False,
+                 flashcard_count: int = 10) -> LLMResult:
         system_template = SYSTEM_PROMPTS[task]
         task_desc = TASK_DESCRIPTIONS.get(task, "")
 
         full_system = system_template.format(
-            task_description=task_desc,
+            task_description=task_desc.format(flashcard_count=flashcard_count),
             injection_guard=INJECTION_GUARD,
+            flashcard_count=flashcard_count,
         )
-        reserve = MAX_OUTPUT_TOKENS.get(task, DEFAULT_OUTPUT_RESERVE)
+        reserve = _reserve_for(task, flashcard_count)
 
-        provider = PROVIDER_ROUTES.get(task, "groq")
+        primary = PROVIDER_ROUTES.get(task, "groq")
+        try:
+            return self._call_provider(primary, full_system, user, model, json_mode, reserve)
+        except LLMError as e:
+            if e.retryable and e.status == 429:
+                # try fallback providers
+                for fallback in PROVIDER_FALLBACK.get(primary, []):
+                    try:
+                        return self._call_provider(fallback, full_system, user, model, json_mode, reserve)
+                    except LLMError:
+                        continue
+            raise
+
+    def _call_provider(self, provider: str, system: str, user: str, model: str | None,
+                       json_mode: bool, reserve: int) -> LLMResult:
         if provider == "gemini":
-            return self._complete_gemini(full_system, user, json_mode, reserve)
-        return self._complete_groq(full_system, user, model, json_mode, reserve)
+            return self._complete_gemini(system, user, json_mode, reserve)
+        return self._complete_groq(system, user, model, json_mode, reserve)
 
     def _complete_groq(self, system: str, user: str, model: str, json_mode: bool, reserve: int) -> LLMResult:
         kwargs = {
