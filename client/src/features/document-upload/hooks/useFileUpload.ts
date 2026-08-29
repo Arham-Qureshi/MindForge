@@ -54,5 +54,29 @@ export function useFileUpload({ onAccepted, mode, flashcardCount }: UseFileUploa
     }
   };
 
-  return { status, error, upload, reset };
+  const uploadMultiple = async (files: File[]) => {
+    setStatus('uploading');
+    setError(null);
+    for (const f of files) {
+      const e = validateFile(f);
+      if (e) {
+        setStatus('error');
+        setError(e);
+        return;
+      }
+    }
+    try {
+      const job = await documentService.processMultipleDocs(files, mode);
+      if (onAccepted && files[0]) onAccepted(job, files[0]);
+    } catch (err) {
+      setStatus('error');
+      if (err instanceof DocumentUploadError || err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred.');
+      }
+    }
+  };
+
+  return { status, error, upload, uploadMultiple, reset };
 }
