@@ -9,25 +9,36 @@ from app.pipelines.llm_client import llm_client as _default_llm, LLMError, PROVI
 from app.pipelines.rate_limiter import RateLimiter, DailyQuotaExhausted
 from app.pipelines.syllabus_pipeline import merge_syllabus_results
 from app.pipelines.pyq_pipeline import merge_pyq_results
-from app.pipelines.notes_pipeline import merge_notes_results
+from app.pipelines.notes_pipeline import merge_notes_results, distribute_flashcards
 from app.schemas.syllabus_schema import SyllabusPayload
 from app.schemas.pyq_schema import PYQAnalysisPayload
-from app.schemas.flashcard_schema import NotesPayload
+from app.schemas.flashcard_schema import (
+    NotesPayload,
+    NotesFlashcardsPayload,
+    NotesExamPayload,
+    NotesSummaryPayload,
+)
 
 TASK_MAP = {
     "SYLLABUS": "syllabus",
     "PYQ": "pyq",
-    "NOTES": "notes",
+    "NOTES": "notes_flashcards",
 }
 MERGE_FNS = {
     "syllabus": merge_syllabus_results,
     "pyq": merge_pyq_results,
     "notes": merge_notes_results,
+    "notes_flashcards": merge_notes_results,
+    "notes_exam": merge_notes_results,
+    "notes_summary": merge_notes_results,
 }
 SCHEMAS = {
     "syllabus": SyllabusPayload,
     "pyq": PYQAnalysisPayload,
     "notes": NotesPayload,
+    "notes_flashcards": NotesFlashcardsPayload,
+    "notes_exam": NotesExamPayload,
+    "notes_summary": NotesSummaryPayload,
 }
 
 POOL_SIZE = 2
@@ -35,6 +46,13 @@ JOB_DEADLINE_S = 15 * 60
 NO_PROGRESS_BACKOFF_S = 2.0
 JOB_TTL_HOURS = 6
 PURGE_INTERVAL_S = 600
+
+# max concurrent LLM calls per provider (matches free-tier RPM limits)
+PROVIDER_MAX_CONCURRENT = {
+    "groq": 5,
+    "gemini": 3,
+    "cerebras": 5,
+}
 
 
 class Worker:
@@ -99,8 +117,22 @@ class Worker:
             return
 
         task = job.get("task") or TASK_MAP[job["doc_type"]]
+
+        # route notes sub-tasks to specialized prompts
+        notes_subtask = job.get("notes_subtask", "")
+        if task == "notes" and notes_subtask:
+            task = f"notes_{notes_subtask}"
+
         self.store.mark_processing(job_id)
         deadline = time.time() + self.deadline_seconds
+
+        # compute per-chunk flashcard distribution for notes tasks
+        flashcard_dist: dict[int, int] = {}
+        if task in ("notes_flashcards", "notes_exam", "notes_summary"):
+            raw_chunks = self.store.raw_chunks(job_id)
+            flashcard_count = job.get("flashcard_count", 10)
+            dist = distribute_flashcards(raw_chunks, flashcard_count)
+            flashcard_dist = {i: c for i, c in enumerate(dist)}
 
         while True:
             current = self.store.get_job(job_id)
@@ -114,10 +146,52 @@ class Worker:
                 self.store.fail_job(job_id, "Processing took too long; please retry the upload.")
                 return
 
-            batch = pending[:POOL_SIZE]
+            # token-aware live packing: respect both rpm and tpm headroom
+            provider = PROVIDER_ROUTES.get(task, "groq")
+            if hasattr(self.limiter, "headroom"):
+                head = self.limiter.headroom(provider)
+            else:
+                head = {"rpm_rem": 30, "tpm_rem": 8000, "reset_in": 0, "penalized": False}
+            if head["penalized"]:
+                time.sleep(head["reset_in"])
+                continue
+            if head["rpm_rem"] <= 0 or head["tpm_rem"] <= 0:
+                time.sleep(max(0.5, head["reset_in"]))
+                continue
+
+            # compute est for each pending chunk (uses per-chunk flashcard count)
+            est_map: dict[int, int] = {}
+            for c in pending:
+                fc = (flashcard_dist.get(c["idx"]) if flashcard_dist else None) or job.get("flashcard_count", 10)
+                est_map[c["idx"]] = self.llm.estimate_request_tokens(task, c["text"], flashcard_count=fc)
+
+            # greedy pack in idx order while staying within live headroom and hard concurrency cap
+            hard_cap = PROVIDER_MAX_CONCURRENT.get(provider, POOL_SIZE)
+            batch: list[dict] = []
+            sum_est = 0
+            for c in pending:
+                if len(batch) >= hard_cap:
+                    break
+                if len(batch) >= head["rpm_rem"]:
+                    break
+                est = est_map[c["idx"]]
+                if sum_est + est > head["tpm_rem"]:
+                    if not batch:
+                        # smallest pending already exceeds remaining TPM → wait for window reset
+                        time.sleep(max(0.5, head["reset_in"]))
+                        batch = []
+                        break
+                    break
+                batch.append(c)
+                sum_est += est
+
+            if not batch:
+                continue
+
             done_before = self.store.get_job(job_id)["chunks_done"]
+            # parallel within batch
             with ThreadPoolExecutor(max_workers=len(batch)) as pool:
-                list(pool.map(lambda c: self._process_chunk(job_id, task, c, job), batch))
+                list(pool.map(lambda c: self._process_chunk(job_id, task, c, job, flashcard_dist), batch))
 
             # fatal/quota failures mark the job failed mid-flight; stop immediately
             status_after = self.store.get_job(job_id)["status"]
@@ -139,21 +213,26 @@ class Worker:
             return
 
         results = self.store.chunk_results(job_id)
-        payload = MERGE_FNS[task](results)
+        flashcard_count = job.get("flashcard_count", 10) if job else 10
+        if task in ("notes_flashcards", "notes_exam", "notes_summary"):
+            payload = MERGE_FNS[task](results, flashcard_count=flashcard_count)
+        else:
+            payload = MERGE_FNS[task](results)
         self.store.set_job_payload(job_id, payload.model_dump_json())
 
-    def _process_chunk(self, job_id: str, task: str, chunk: dict, job: dict | None = None):
+    def _process_chunk(self, job_id: str, task: str, chunk: dict, job: dict | None = None,
+                       flashcard_dist: dict[int, int] | None = None):
         provider = PROVIDER_ROUTES.get(task, "groq")
         idx = chunk["idx"]
         chunk_text = chunk["text"]
-        if task == "notes" and job:
-            count = job.get("flashcard_count", 10)
-            chunk_text = f"Generate exactly {count} flashcards.\n\n{chunk_text}"
+        flashcard_count = (flashcard_dist.get(idx) if flashcard_dist else None) or (
+            job.get("flashcard_count", 10) if job else 10
+        )
         try:
-            est = self.llm.estimate_request_tokens(task, chunk_text)
+            est = self.llm.estimate_request_tokens(task, chunk_text, flashcard_count=flashcard_count)
             self.limiter.acquire(provider, est)
 
-            result = self.llm.complete(task=task, user=chunk_text, json_mode=True)
+            result = self.llm.complete(task=task, user=chunk_text, json_mode=True, flashcard_count=flashcard_count)
             data = json.loads(result.content)
             validated = SCHEMAS[task].model_validate(data).model_dump()
 
