@@ -21,7 +21,7 @@ const MODE_CONTENT: Record<ProcessingMode, { title: string; description: string;
 };
 
 type DropzoneProps = {
-  onAccepted?: (job: JobAccepted) => void;
+  onAccepted?: (job: JobAccepted, file: File) => void;
   onReset?: () => void;
   mode: ProcessingMode;
   flashcardCount: number;
