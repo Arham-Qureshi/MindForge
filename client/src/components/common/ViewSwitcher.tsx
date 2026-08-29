@@ -5,12 +5,15 @@ import SyllabusView from "../../features/syllabus-view/SyllabusView";
 import PYQView from "../../features/pyq-view/PYQView";
 import NotesView from "../../features/notes-view/NotesView";
 
+type NotesTab = 'flashcards' | 'exam' | 'summary';
+
 type ViewSwitcherProps = {
   data: EngineResponse;
   onReset: () => void;
+  onGenerateNotes?: (subtask: NotesTab) => void;
 };
 
-export default function ViewSwitcher({ data, onReset }: ViewSwitcherProps) {
+export default function ViewSwitcher({ data, onReset, onGenerateNotes }: ViewSwitcherProps) {
   const { classification, payload } = data;
   const docType = classification.doc_type;
 
@@ -76,7 +79,7 @@ export default function ViewSwitcher({ data, onReset }: ViewSwitcherProps) {
         )}
         
         {docType === 'NOTES' && (
-          <NotesView payload={payload as NotesPayload} />
+          <NotesView payload={payload as NotesPayload} onGenerateMore={onGenerateNotes} />
         )}
       </div>
     </div>
