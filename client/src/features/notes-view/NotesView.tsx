@@ -6,15 +6,19 @@ type NotesTab = 'flashcards' | 'exam' | 'summary';
 
 type NotesViewProps = {
   payload: NotesPayload;
-  onGenerateMore?: (subtask: NotesTab) => void;
+  onGenerateMore?: (subtask: NotesTab, count?: number) => void;
+  activeTab?: NotesTab;
+  onTabChange?: (tab: NotesTab) => void;
 };
 
-export default function NotesView({ payload, onGenerateMore }: NotesViewProps) {
-  const [activeTab, setActiveTab] = useState<NotesTab>(() => {
+export default function NotesView({ payload, onGenerateMore, activeTab: controlledTab, onTabChange }: NotesViewProps) {
+  const [internalTab, setInternalTab] = useState<NotesTab>(() => {
     if (payload.flashcards.length > 0) return 'flashcards';
     if (payload.practice_exam.length > 0) return 'exam';
     return 'summary';
   });
+  const activeTab = controlledTab ?? internalTab;
+  const setActiveTab = onTabChange ?? setInternalTab;
 
   const tabs: { key: NotesTab; label: string; hasData: boolean }[] = [
     { key: 'flashcards', label: 'Flashcards', hasData: payload.flashcards.length > 0 },
@@ -54,7 +58,7 @@ export default function NotesView({ payload, onGenerateMore }: NotesViewProps) {
         {activeTab === 'flashcards' && (
           <FlashcardDeck
             flashcards={payload.flashcards}
-            onGenerateMore={onGenerateMore ? () => onGenerateMore('flashcards') : undefined}
+            onGenerateMore={onGenerateMore ? (count: number) => onGenerateMore('flashcards', count) : undefined}
           />
         )}
 
