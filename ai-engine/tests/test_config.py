@@ -6,7 +6,7 @@ def test_settings_loads_default_model():
 
 
 def test_settings_loads_gemini_model():
-    assert settings.GEMINI_MODEL == "gemini-2.5-flash"
+    assert settings.GEMINI_MODEL == "gemini-3.5-flash-lite"
 
 
 def test_settings_loads_cors_origins():
