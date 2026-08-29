@@ -5,7 +5,7 @@ import { documentService, DocumentUploadError } from '../../../services/document
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
 
 export type UseFileUploadOptions = {
-  onAccepted?: (job: JobAccepted) => void;
+  onAccepted?: (job: JobAccepted, file: File) => void;
   mode: ProcessingMode;
   flashcardCount?: number;
 };
@@ -43,7 +43,7 @@ export function useFileUpload({ onAccepted, mode, flashcardCount }: UseFileUploa
     try {
       // engine replies 202 fast; chunk progress arrives via job polling
       const job = await documentService.processDocument(file, mode, flashcardCount);
-      if (onAccepted) onAccepted(job);
+      if (onAccepted) onAccepted(job, file);
     } catch (err) {
       setStatus('error');
       if (err instanceof DocumentUploadError || err instanceof Error) {
