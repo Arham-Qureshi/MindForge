@@ -1,6 +1,7 @@
 import type { JobAccepted, JobStatus, ProcessingMode } from "../types/api.types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const ENGINE_URL = import.meta.env.VITE_ENGINE_URL || "http://localhost:8000";
 
 export class DocumentUploadError extends Error {
   public readonly code: string;
@@ -31,6 +32,7 @@ export const documentService = {
     const params = new URLSearchParams({ mode });
     if (mode === 'notes' && flashcardCount) {
       params.set("flashcard_count", String(flashcardCount));
+      params.set("notes_subtask", "flashcards");
     }
 
     const formData = new FormData();
@@ -39,6 +41,33 @@ export const documentService = {
     const response = await fetch(`${API_URL}/api/document/process?${params}`, {
       method: "POST",
       body: formData,
+    });
+
+    if (!response.ok) {
+      throw await errorFrom(response);
+    }
+
+    return response.json();
+  },
+
+  async reprocessJob(
+    chunks: string[],
+    mode: ProcessingMode,
+    flashcardCount?: number,
+    notesSubtask?: string,
+  ): Promise<JobAccepted> {
+    const params = new URLSearchParams({ mode });
+    if (mode === 'notes' && flashcardCount) {
+      params.set("flashcard_count", String(flashcardCount));
+    }
+    if (notesSubtask) {
+      params.set("notes_subtask", notesSubtask);
+    }
+
+    const response = await fetch(`${API_URL}/api/document/reprocess?${params}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chunks }),
     });
 
     if (!response.ok) {
@@ -63,5 +92,22 @@ export const documentService = {
     if (!response.ok) {
       throw await errorFrom(response);
     }
+  },
+
+  connectSSE(jobId: string, onEvent: (data: JobStatus) => void, onError: () => void): EventSource {
+    const es = new EventSource(`${ENGINE_URL}/api/v1/jobs/${jobId}/stream`);
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as JobStatus;
+        onEvent(data);
+      } catch {
+        onError();
+      }
+    };
+    es.onerror = () => {
+      onError();
+      es.close();
+    };
+    return es;
   },
 };
